@@ -1,0 +1,10 @@
+flowchart TD
+ A[Upload PDF / PNG / JPEG] --> B[Validate size, MIME, signature, malware]
+ B --> C[Encrypt AES-256-GCM and store privately]
+ C --> D[Compute SHA-256 file digest + nonce commitment]
+ D --> E[Participant signs commitment on NEAR]
+ E --> F[OCR and typed extraction]
+ F --> G[Deterministic cross-document checks]
+ G --> H[Optional local model explanation]
+ H --> I[Human reviews source-linked findings]
+ I --> J[No automatic payment action]

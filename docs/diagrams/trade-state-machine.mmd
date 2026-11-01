@@ -1,0 +1,25 @@
+stateDiagram-v2
+ [*] --> AwaitingAcceptance
+ AwaitingAcceptance --> Accepted: supplier accepts
+ AwaitingAcceptance --> Cancelled: buyer cancels / 7d expiry
+ Accepted --> Funded: exact SDD deposit
+ Accepted --> Cancelled: funding deadline expires + buyer cancels
+ Funded --> DocumentReview: first document commitment
+ DocumentReview --> InspectionPending: required docs + inspector
+ InspectionPending --> InspectionPassed: inspector PASS
+ InspectionPending --> InspectionFailed: inspector FAIL
+ InspectionPassed --> ReleaseAuthorized: buyer confirms before 72h
+ InspectionFailed --> RefundAuthorized: buyer requests refund
+ InspectionFailed --> Disputed: buyer opens dispute
+ Funded --> Disputed: either party
+ DocumentReview --> Disputed: either party
+ InspectionPending --> Disputed: either party
+ InspectionPassed --> Disputed: either party at/after 72h
+ Disputed --> ReleaseAuthorized: resolver releases
+ Disputed --> RefundAuthorized: resolver refunds
+ ReleaseAuthorized --> PayoutPending: any caller triggers
+ RefundAuthorized --> RefundPending: any caller triggers
+ PayoutPending --> Completed: callback success
+ PayoutPending --> ReleaseAuthorized: callback failure
+ RefundPending --> Refunded: callback success
+ RefundPending --> RefundAuthorized: callback failure

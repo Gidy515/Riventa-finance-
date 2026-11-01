@@ -1,0 +1,23 @@
+flowchart TB
+ subgraph Client
+  WEB[Next.js Frontend]
+  WALLET[NEAR Wallet]
+ end
+ subgraph Chain[NEAR Testnet]
+  CONTRACT[Trade Operations Contract]
+  TOKEN[SDD NEP-141]
+ end
+ subgraph Services[Backend Trust Boundary]
+  API[Node.js TypeScript API]
+  WORKER[Document Worker]
+  DB[(PostgreSQL)]
+  STORE[(Encrypted Filesystem)]
+  OLLAMA[Ollama qwen3:4b]
+ end
+ WEB --> WALLET --> CONTRACT
+ WEB --> API
+ API --> CONTRACT
+ API --> DB
+ API --> STORE
+ API --> WORKER --> OLLAMA
+ CONTRACT <--> TOKEN

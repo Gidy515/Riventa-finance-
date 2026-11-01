@@ -1,0 +1,13 @@
+flowchart TD
+ A[Eligible active state] --> B[Buyer or supplier opens dispute]
+ B --> C[Stored resolver notified]
+ C --> D{Resolver decision recorded within 5 days?}
+ D -->|Yes| E[Resolver records release/refund]
+ D -->|No| F[Either party may propose one replacement]
+ C --> G[Parties may mutually propose replacement at any time]
+ F --> H{Other party approves same new account?}
+ G --> H
+ H -->|Yes| I[New resolver active; fresh 5-day window]
+ I --> C
+ H -->|No| J[Dispute remains locked; no admin override]
+ E --> K[ReleaseAuthorized or RefundAuthorized]

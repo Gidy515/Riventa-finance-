@@ -1,0 +1,29 @@
+# Rust
+target/
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Local application data
+.storage/
+storage-data/
+postgres-data/
+
+# NEAR local development
+.near/
+.near-sandbox/
+sandbox-data/
+
+# Logs and generated files
+*.log
+.DS_Store

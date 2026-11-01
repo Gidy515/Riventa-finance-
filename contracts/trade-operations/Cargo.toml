@@ -1,0 +1,14 @@
+[package]
+name = "riventa-trade-operations"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-contract-standards = "=5.29.1"
+near-sdk = { version = "=5.29.1", features = ["legacy"] }
+
+[dev-dependencies]
+near-sdk = { version = "=5.29.1", features = ["legacy", "unit-testing"] }

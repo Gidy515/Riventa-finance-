@@ -1,0 +1,15 @@
+sequenceDiagram
+ participant Caller
+ participant Contract
+ participant FT as SDD NEP-141
+ participant Callback
+ Caller->>Contract: release_payment / refund_escrow
+ Contract->>Contract: validate authorized state; create settlement ID
+ Contract->>FT: ft_transfer(recipient, amount)
+ FT-->>Callback: promise result
+ Callback->>Contract: private callback(settlement_id)
+ alt transfer succeeds
+  Contract->>Contract: mark success; reduce liability; terminal state
+ else transfer fails
+  Contract->>Contract: mark failed; preserve liability; restore authorization
+ end

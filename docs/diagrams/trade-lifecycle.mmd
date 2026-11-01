@@ -1,0 +1,21 @@
+flowchart TD
+ A[Buyer creates trade] --> B[Supplier accepts]
+ B --> C[Buyer funds exact SDD]
+ C --> D[Supplier commits required documents]
+ D --> E[Buyer assigns inspector]
+ E --> F[Inspector submits final attestation]
+ F -->|Pass| G[Buyer has 72h to confirm]
+ G -->|Confirm| L[ReleaseAuthorized]
+ G -->|No confirmation by 72h| K[Either party may dispute]
+ F -->|Fail| H[Buyer chooses]
+ H -->|Refund| J[RefundAuthorized]
+ H -->|Dispute| K
+ K --> M[Resolver decision or mutual replacement]
+ M -->|Release| L
+ M -->|Refund| J
+ L --> N[Async payout]
+ J --> O[Async refund]
+ N -->|success| P[Completed]
+ O -->|success| Q[Refunded]
+ N -->|failure| L
+ O -->|failure| J
