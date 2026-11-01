@@ -3,8 +3,8 @@ mod state;
 mod types;
 
 use crate::errors::{assert_account_distinct, require};
-use crate::state::{StorageKey, Trade};
-use crate::types::{TradeState, TradeView};
+use crate::state::{DocumentCommitment, StorageKey, Trade};
+use crate::types::{DocumentType, TradeState, TradeView};
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
@@ -24,6 +24,7 @@ pub struct Riventa {
     paused: bool,
     next_trade_id: u64,
     trades: LookupMap<u64, Trade>,
+    document_commitments: LookupMap<u64, Vec<DocumentCommitment>>,
 }
 
 #[near]
@@ -37,6 +38,7 @@ impl Riventa {
             paused: false,
             next_trade_id: 0,
             trades: LookupMap::new(StorageKey::Trades),
+            document_commitments: LookupMap::new(StorageKey::TradeDocuments),
         }
     }
 
@@ -155,6 +157,106 @@ impl Riventa {
         trade.state = TradeState::Cancelled;
         self.trades.insert(&trade_id, &trade);
         env::log_str(&format!("EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"trade_cancelled\",\"data\":[{{\"trade_id\":{trade_id},\"state\":\"Cancelled\"}}]}}"));
+    }
+
+    /// Records an immutable supplier document commitment.
+    ///
+    /// The document itself, filename, nonce and extracted content remain off-chain.
+    /// Versions are sequential: version 1 must exist before version 2.
+    pub fn record_document_commitment(
+        &mut self,
+        trade_id: u64,
+        document_type: DocumentType,
+        version: u8,
+        commitment: Vec<u8>,
+    ) {
+        let mut trade = self.get_trade_or_panic(trade_id);
+
+        require(
+            matches!(trade.state, TradeState::Funded | TradeState::DocumentReview),
+            "INVALID_TRADE_STATE_FOR_DOCUMENT",
+        );
+
+        let caller = env::predecessor_account_id();
+        require(
+            caller == trade.supplier,
+            "ONLY_SUPPLIER_MAY_SUBMIT_DOCUMENT",
+        );
+
+        require(commitment.len() == 32, "INVALID_DOCUMENT_COMMITMENT");
+        require((1..=2).contains(&version), "INVALID_DOCUMENT_VERSION");
+
+        let mut documents = self.document_commitments.get(&trade_id).unwrap_or_default();
+
+        let version_exists = documents
+            .iter()
+            .any(|document| document.document_type == document_type && document.version == version);
+
+        require(!version_exists, "DOCUMENT_VERSION_ALREADY_EXISTS");
+
+        if version == 1 {
+            let has_existing_version = documents
+                .iter()
+                .any(|document| document.document_type == document_type);
+
+            require(!has_existing_version, "DOCUMENT_VERSION_ALREADY_EXISTS");
+        } else {
+            let has_version_one = documents
+                .iter()
+                .any(|document| document.document_type == document_type && document.version == 1);
+
+            require(has_version_one, "DOCUMENT_VERSION_ONE_REQUIRED");
+        }
+
+        let document_commitment: [u8; 32] =
+            commitment.try_into().expect("INVALID_DOCUMENT_COMMITMENT");
+
+        documents.push(DocumentCommitment {
+            document_type,
+            version,
+            commitment: document_commitment,
+            submitted_by: caller,
+            submitted_at: env::block_timestamp(),
+        });
+
+        self.document_commitments.insert(&trade_id, &documents);
+
+        // The first valid document moves the funded trade into document review.
+        if trade.state == TradeState::Funded {
+            trade.state = TradeState::DocumentReview;
+            self.trades.insert(&trade_id, &trade);
+        }
+
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"document_commitment_recorded\",\"data\":[{{\"trade_id\":{},\"document_type\":\"{}\",\"version\":{}}}]}}",
+            trade_id,
+            document_type.as_str(),
+            version
+        ));
+    }
+
+    /// Returns the public on-chain commitments and non-sensitive submission metadata.
+    pub fn get_document_commitments(&self, trade_id: u64) -> Vec<DocumentCommitment> {
+        self.document_commitments.get(&trade_id).unwrap_or_default()
+    }
+
+    pub fn are_required_supplier_documents_complete(&self, trade_id: u64) -> bool {
+        require(self.trades.get(&trade_id).is_some(), "TRADE_NOT_FOUND");
+        self.required_supplier_documents_complete(trade_id)
+    }
+
+    /// True only when all three required supplier document types have version 1.
+    /// Used by the inspector-assignment flow in the next implementation slice.
+    fn required_supplier_documents_complete(&self, trade_id: u64) -> bool {
+        let documents = self.document_commitments.get(&trade_id).unwrap_or_default();
+
+        DocumentType::required_supplier_types()
+            .iter()
+            .all(|required_type| {
+                documents.iter().any(|document| {
+                    document.document_type == *required_type && document.version == 1
+                })
+            })
     }
 
     pub fn get_trade(&self, trade_id: u64) -> Option<TradeView> {
@@ -287,6 +389,22 @@ mod tests {
         );
         context("supplier.testnet", now + 1);
         contract.accept_trade(id);
+        id
+    }
+
+    fn funded_trade(contract: &mut Riventa, now: u64) -> u64 {
+        let id = accepted_trade(contract, now);
+
+        let unused = receive(
+            contract,
+            "sdd.testnet",
+            "buyer.testnet",
+            now + 1_000,
+            REQUIRED_FUNDING_AMOUNT,
+            &format!(r#"{{"trade_id":{id}}}"#),
+        );
+
+        assert_eq!(unused, 0);
         id
     }
 
@@ -495,5 +613,160 @@ mod tests {
         assert_eq!(first, 0);
         assert_eq!(second, REQUIRED_FUNDING_AMOUNT);
         assert_eq!(contract.get_trade(id).unwrap().state, TradeState::Funded);
+    }
+
+    #[test]
+    fn supplier_document_submission_moves_funded_trade_to_document_review() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+
+        assert_eq!(
+            contract.get_trade(id).unwrap().state,
+            TradeState::DocumentReview
+        );
+
+        let documents = contract.get_document_commitments(id);
+        assert_eq!(documents.len(), 1);
+        assert_eq!(documents[0].document_type, DocumentType::CommercialInvoice);
+        assert_eq!(documents[0].version, 1);
+        assert_eq!(documents[0].submitted_by, account("supplier.testnet"));
+        assert_eq!(documents[0].commitment, [7u8; 32]);
+    }
+
+    #[test]
+    #[should_panic(expected = "ONLY_SUPPLIER_MAY_SUBMIT_DOCUMENT")]
+    fn buyer_cannot_submit_supplier_document() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("buyer.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+    }
+
+    #[test]
+    #[should_panic(expected = "INVALID_TRADE_STATE_FOR_DOCUMENT")]
+    fn supplier_cannot_submit_document_before_funding() {
+        let mut contract = contract();
+        let id = accepted_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+    }
+
+    #[test]
+    #[should_panic(expected = "INVALID_DOCUMENT_COMMITMENT")]
+    fn document_commitment_must_be_exactly_32_bytes() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, vec![1u8; 31]);
+    }
+
+    #[test]
+    #[should_panic(expected = "DOCUMENT_VERSION_ONE_REQUIRED")]
+    fn version_two_cannot_be_submitted_before_version_one() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 2, commitment());
+    }
+
+    #[test]
+    #[should_panic(expected = "DOCUMENT_VERSION_ALREADY_EXISTS")]
+    fn existing_document_version_cannot_be_overwritten() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+
+        context("supplier.testnet", 4_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, vec![9u8; 32]);
+    }
+
+    #[test]
+    fn supplier_can_append_version_two_without_overwriting_version_one() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+
+        context("supplier.testnet", 4_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 2, vec![9u8; 32]);
+
+        let documents = contract.get_document_commitments(id);
+        assert_eq!(documents.len(), 2);
+        assert_eq!(documents[0].version, 1);
+        assert_eq!(documents[0].commitment, [7u8; 32]);
+        assert_eq!(documents[1].version, 2);
+        assert_eq!(documents[1].commitment, [9u8; 32]);
+    }
+
+    #[test]
+    #[should_panic(expected = "INVALID_DOCUMENT_VERSION")]
+    fn third_document_version_is_rejected() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 3, commitment());
+    }
+
+    #[test]
+    fn inspector_eligibility_requires_all_three_supplier_documents() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        assert!(!contract.are_required_supplier_documents_complete(id));
+
+        context("supplier.testnet", 3_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 1, commitment());
+
+        assert!(!contract.are_required_supplier_documents_complete(id));
+
+        context("supplier.testnet", 4_000);
+        contract.record_document_commitment(id, DocumentType::PackingList, 1, vec![8u8; 32]);
+
+        assert!(!contract.are_required_supplier_documents_complete(id));
+
+        context("supplier.testnet", 5_000);
+        contract.record_document_commitment(
+            id,
+            DocumentType::CertificateOfOrigin,
+            1,
+            vec![9u8; 32],
+        );
+
+        assert!(contract.are_required_supplier_documents_complete(id));
+
+        // Document completion does not assign an inspector or change the state.
+        assert_eq!(
+            contract.get_trade(id).unwrap().state,
+            TradeState::DocumentReview
+        );
+    }
+
+    #[test]
+    fn document_type_serializes_to_snake_case() {
+        assert_eq!(
+            near_sdk::serde_json::to_string(&DocumentType::CommercialInvoice).unwrap(),
+            "\"commercial_invoice\""
+        );
+
+        assert_eq!(
+            near_sdk::serde_json::to_string(&DocumentType::PackingList).unwrap(),
+            "\"packing_list\""
+        );
+
+        assert_eq!(
+            near_sdk::serde_json::to_string(&DocumentType::CertificateOfOrigin).unwrap(),
+            "\"certificate_of_origin\""
+        );
     }
 }

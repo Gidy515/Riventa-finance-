@@ -59,3 +59,32 @@ impl From<Trade> for TradeView {
         }
     }
 }
+
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
+)]
+#[borsh(crate = "near_sdk::borsh")]
+#[serde(crate = "near_sdk::serde", rename_all = "snake_case")]
+pub enum DocumentType {
+    CommercialInvoice,
+    PackingList,
+    CertificateOfOrigin,
+}
+
+impl DocumentType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::CommercialInvoice => "commercial_invoice",
+            Self::PackingList => "packing_list",
+            Self::CertificateOfOrigin => "certificate_of_origin",
+        }
+    }
+
+    pub fn required_supplier_types() -> [Self; 3] {
+        [
+            Self::CommercialInvoice,
+            Self::PackingList,
+            Self::CertificateOfOrigin,
+        ]
+    }
+}
