@@ -2,6 +2,7 @@
 members = [
     "contracts/trade-operations",
     "integration-tests",
+    "test-contracts/sdd-token",
 ]
 resolver = "2"
 
