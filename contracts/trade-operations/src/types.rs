@@ -88,3 +88,30 @@ impl DocumentType {
         ]
     }
 }
+
+/// The only administrative actions the multisig can authorize.
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[borsh(crate = "near_sdk::borsh")]
+#[serde(crate = "near_sdk::serde", rename_all = "snake_case")]
+pub enum AdminAction {
+    RegisterInspector {
+        account_id: AccountId,
+        credential_commitment: [u8; 32],
+    },
+    SetInspectorStatus {
+        account_id: AccountId,
+        active: bool,
+    },
+    PauseNewTrades,
+    UnpauseNewTrades,
+}
+
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
+)]
+#[borsh(crate = "near_sdk::borsh")]
+#[serde(crate = "near_sdk::serde", rename_all = "snake_case")]
+pub enum InspectionOutcome {
+    Pass,
+    Fail,
+}
