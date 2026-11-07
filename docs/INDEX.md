@@ -1,6 +1,8 @@
 # Documentation Index
 
-This directory is the normative Riventa MVP architecture and requirements baseline.
+This directory contains the normative Riventa autonomous trade-operations MVP architecture and requirements baseline (Architecture Baseline v1.1, incorporating accepted ADR-009).
+
+ADR-010 is currently proposed. Its proposed NEAR Intents/Tidepool settlement integration and associated testnet asset changes are not part of the approved implementation baseline until formally accepted.
 
 1. [Project overview](01-project-overview.md)
 2. [Problem and solution](02-problem-and-solution.md)
@@ -20,4 +22,9 @@ This directory is the normative Riventa MVP architecture and requirements baseli
 16. [Implementation guides](implementation/)
 
 ## Normative precedence
-The decision register records final choices. The numbered specifications define behavior. ADRs explain why. Diagrams visualize the same rules and must not introduce independent behavior. If a conflict is found, implementation stops until the relevant documents are reconciled and the decision register is updated.
+
+The decision register records approved decisions and explicitly identified proposals. Accepted ADRs may supersede earlier decisions where stated. Proposed ADRs do not change current implementation requirements.
+
+The numbered specifications define approved system behavior. ADRs document architectural decisions and their rationale. Diagrams visualize the same rules and must not introduce independent behavior.
+
+If a conflict is found, implementation of the affected behavior stops until the relevant documents are reconciled and the decision register is updated.

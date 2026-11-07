@@ -1,10 +1,27 @@
 sequenceDiagram
- participant Caller
+ participant Buyer
+ participant Agent
  participant Contract
  participant FT as SDD NEP-141
  participant Callback
- Caller->>Contract: release_payment / refund_escrow
- Contract->>Contract: validate authorized state; create settlement ID
+ Buyer->>Contract: create mandate (buyer-signed)
+ Agent->>Contract: create_trade_as_agent(mandate_id)
+ Contract->>Contract: validate mandate; reserve budget; store policy snapshot
+ Buyer->>FT: ft_transfer_call(trade_id)
+ FT->>Contract: ft_on_transfer
+ Contract->>Contract: validate buyer and amount; consume reservation
+ Note over Contract: Documents and inspection complete
+ alt Passing inspection; snapshot permits immediate release
+  Agent->>Contract: authorize_release_under_mandate
+ else Passing inspection; no immediate agent permission
+  Buyer->>Contract: confirm_acceptance
+ else Failed inspection; snapshot permits refund
+  Agent->>Contract: authorize_refund_under_mandate
+ else Failed inspection; no agent refund permission
+  Buyer->>Contract: request refund or open dispute
+ end
+ Contract->>Contract: validate snapshot/state; authorize settlement
+ Agent->>Contract: release_payment / refund_escrow (or any caller)
  Contract->>FT: ft_transfer(recipient, amount)
  FT-->>Callback: promise result
  Callback->>Contract: private callback(settlement_id)

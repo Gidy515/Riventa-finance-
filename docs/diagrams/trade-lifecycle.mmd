@@ -1,21 +1,29 @@
 flowchart TD
- A[Buyer creates trade] --> B[Supplier accepts]
- B --> C[Buyer funds exact SDD]
- C --> D[Supplier commits required documents]
- D --> E[Buyer assigns inspector]
- E --> F[Inspector submits final attestation]
- F -->|Pass| G[Buyer has 72h to confirm]
- G -->|Confirm| L[ReleaseAuthorized]
- G -->|No confirmation by 72h| K[Either party may dispute]
- F -->|Fail| H[Buyer chooses]
- H -->|Refund| J[RefundAuthorized]
- H -->|Dispute| K
- K --> M[Resolver decision or mutual replacement]
- M -->|Release| L
- M -->|Refund| J
- L --> N[Async payout]
- J --> O[Async refund]
- N -->|success| P[Completed]
- O -->|success| Q[Refunded]
- N -->|failure| L
- O -->|failure| J
+ A[Buyer creates and signs mandate] --> B[Agent validates request and mandate]
+ B -->|Within scope and budget| C[Agent creates trade]
+ B -->|Out of policy| X[Reject and log action]
+ C --> D[Contract atomically reserves budget]
+ D --> E[Supplier accepts]
+ E --> F[Buyer funds exact SDD]
+ F --> G[Reservation becomes consumed budget]
+ G --> H[Supplier commits required documents]
+ H --> I[Buyer assigns registered inspector]
+ I --> J[Inspector submits final attestation]
+ J -->|Pass + mandate permits immediate release| K[Agent authorizes release]
+ J -->|Pass + no agent permission| L[Buyer confirmation path]
+ L --> M[Buyer confirms before 72h deadline]
+ J -->|Fail + mandate permits refund| N[Agent authorizes refund]
+ J -->|Fail + no agent permission| O[Buyer chooses refund or dispute]
+ K --> P[Authorized settlement trigger]
+ M --> P
+ N --> Q[Authorized refund trigger]
+ O -->|Refund| Q
+ O -->|Dispute| R[Independent resolver]
+ R -->|Release| P
+ R -->|Refund| Q
+ P --> S[Async payout]
+ Q --> T[Async refund]
+ S -->|Success| U[Completed]
+ T -->|Success| V[Refunded]
+ S -->|Failure| K
+ T -->|Failure| N

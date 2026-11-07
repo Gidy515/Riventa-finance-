@@ -1,7 +1,13 @@
 flowchart TB
  subgraph Client
   WEB[Next.js Frontend]
-  WALLET[NEAR Wallet]
+  WALLET[Buyer / Participant Wallets]
+ end
+ subgraph AgentBoundary[Agent Execution Boundary]
+  AGENT[Agent Orchestrator]
+  AGKEY[Agent NEAR Account / Restricted Key]
+  POLICY[Deterministic Mandate Policy Checks]
+  AGENT --> POLICY --> AGKEY
  end
  subgraph Chain[NEAR Testnet]
   CONTRACT[Trade Operations Contract]
@@ -20,4 +26,6 @@ flowchart TB
  API --> DB
  API --> STORE
  API --> WORKER --> OLLAMA
+ API --> AGENT
+ AGKEY -->|agent-signed no-deposit calls| CONTRACT
  CONTRACT <--> TOKEN

@@ -17,3 +17,25 @@ Buyer, supplier, inspector and resolver workflows; pass/payout; fail/refund; fai
 
 ## CI gates
 Format, lint, compile, unit tests, sandbox tests, backend/frontend tests, dependency audit and secret scan. No testnet deployment on failing gate.
+
+
+## Mandate and autonomous-agent tests
+
+Contract tests must cover:
+- Buyer-only mandate creation, update and revocation.
+- Agent identity and buyer/mandate binding.
+- Expired, revoked and out-of-scope mandate rejection.
+- Supplier, token and per-trade amount enforcement.
+- Atomic aggregate budget reservation under concurrent trade creation.
+- Reservation release on cancellation before funding.
+- Reservation-to-consumed conversion on successful funding.
+- Failed/rejected funding does not consume budget.
+- Post-funding refund does not automatically restore budget.
+- Immutable trade policy snapshots after mandate update/revocation.
+- Revocation blocks new agent trades but preserves already-funded trade snapshot authority.
+- Immediate release only when explicitly permitted by the snapshot.
+- Dispute before `ReleaseAuthorized` and rejection after authorization.
+- Agent refund after failure only when explicitly permitted.
+- Agent cannot submit inspection attestations or resolve disputes.
+
+Backend tests must cover agent key isolation, deterministic policy rejection, duplicate job delivery, transaction submission/reconciliation and stale mandate projections. LLM output must never bypass the deterministic policy layer.

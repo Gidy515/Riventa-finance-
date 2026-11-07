@@ -1,12 +1,16 @@
 flowchart LR
- B[Buyer] --> UI[Riventa Web App]
+ B[Buyer / Mandate Owner] --> UI[Riventa Web App]
  S[Supplier] --> UI
  I[Inspector] --> UI
- R[Resolver] --> UI
- UI -->|wallet-signed calls| C[NEAR Trade Contract]
+ R[Independent Resolver] --> UI
+ UI -->|buyer-signed mandate and funding| C[NEAR Trade Operations Contract]
+ AG[Authorized Riventa Agent] -->|agent-signed permitted actions| C
  UI --> API[Backend API]
- API --> DB[(PostgreSQL metadata/index)]
- API --> FS[(Encrypted private files)]
+ API --> DB[(PostgreSQL projections / jobs)]
+ API --> FS[(Encrypted Private Files)]
  API --> AI[Local Ollama]
- API -->|read/query/reconcile| C
+ API --> POLICY[Deterministic Policy Engine]
+ POLICY --> AG
+ API -->|read / reconcile| C
  C --> FT[SDD NEP-141 Test Token]
+ C -->|events and views| API

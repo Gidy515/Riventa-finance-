@@ -14,6 +14,33 @@ Challenge binds account ID, exact application origin, random 32-byte nonce, audi
 
 Financial state changes are wallet-signed contract calls. Backend may prepare unsigned transaction payloads but never signs as a user or holds participant keys.
 
+## Agent execution
+
+The backend includes an agent orchestration worker that processes approved trade requests and executes only typed actions permitted by customer mandates.
+
+The worker:
+- Reads current mandate and trade state from contract views or reconciled chain projections.
+- Validates supplier, token, per-trade amount, aggregate budget, expiry, revocation and policy version using deterministic code.
+- Creates an agent transaction using the agent's own NEAR account.
+- Submits only the permitted Riventa contract method.
+- Records mandate ID, trade ID, policy version, transaction hash, receipt identity and result for audit/reconciliation.
+- Re-reads contract state after execution; it does not assume that transaction submission means success.
+
+The worker never receives customer private keys and never signs as the buyer, supplier, inspector or resolver. Its operational key must be isolated from application users and restricted to the Riventa contract and required no-deposit agent methods where NEAR FunctionCall access keys support that scope. Agent methods must not rely on attached deposits.
+
+The backend policy layer is defense in depth. The contract is authoritative for mandate validity, budget reservation, trade state and settlement authorization.
+
+## Mandate API and transaction boundary
+
+The frontend prepares buyer-signed mandate creation, update and revocation transactions. The backend may provide unsigned transaction payloads and display current mandate state, but it cannot create or change a mandate on the buyer's behalf.
+
+The agent worker may submit:
+- Agent trade creation under an active mandate.
+- Immediate release authorization when the funded trade snapshot permits it and inspection has passed.
+- Failed-inspection refund authorization when the funded trade snapshot permits it.
+
+The worker may not change accepted terms, change participants, submit inspector attestations, resolve disputes, alter mandate budgets or revoke a mandate. Existing participant actions remain signed by their respective wallets.
+
 ## Indexing
 Consume NEP-297 events and query contract views. Process idempotently with transaction/receipt identity; persist block height/hash; support replay/backfill; reconcile all trade/settlement views. If indexer lag exceeds 2 minutes, mark data stale and query contract directly before granting access or displaying finality.
 
