@@ -10,6 +10,10 @@ pub enum StorageKey {
     AdminProposals,
     Inspectors,
     TradeInspections,
+    Mandates,
+    TradePolicySnapshots,
+    SettlementRecords,
+    ActiveSettlements,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
@@ -30,6 +34,73 @@ pub struct Trade {
     pub agreement_commitment: [u8; 32],
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[borsh(crate = "near_sdk::borsh")]
+pub struct ExecutionMandate {
+    pub id: u64,
+    pub buyer: AccountId,
+    pub agent: AccountId,
+    pub supplier: AccountId,
+    pub resolver: AccountId,
+    pub payment_token: AccountId,
+    pub max_trade_amount: u128,
+    pub aggregate_budget: u128,
+    pub reserved_budget: u128,
+    pub consumed_budget: u128,
+    pub allow_release_after_pass: bool,
+    pub allow_refund_after_fail: bool,
+    pub expires_at: u64,
+    pub revoked: bool,
+    pub version: u64,
+}
+
+/// Immutable policy captured when an agent creates a trade.
+/// Later mandate updates or revocation must never modify this record.
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[borsh(crate = "near_sdk::borsh")]
+pub struct TradePolicySnapshot {
+    pub trade_id: u64,
+    pub mandate_id: u64,
+    pub mandate_version: u64,
+    pub buyer: AccountId,
+    pub agent: AccountId,
+    pub supplier: AccountId,
+    pub resolver: AccountId,
+    pub payment_token: AccountId,
+    pub amount: u128,
+    pub allow_release_after_pass: bool,
+    pub allow_refund_after_fail: bool,
+    pub mandate_expires_at: u64,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[borsh(crate = "near_sdk::borsh")]
+pub enum SettlementKind {
+    Payout,
+    Refund,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[borsh(crate = "near_sdk::borsh")]
+pub enum SettlementStatus {
+    Pending,
+    Succeeded,
+    Failed,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[borsh(crate = "near_sdk::borsh")]
+pub struct SettlementRecord {
+    pub id: u64,
+    pub trade_id: u64,
+    pub recipient: AccountId,
+    pub amount: u128,
+    pub kind: SettlementKind,
+    pub status: SettlementStatus,
+    pub created_at: u64,
+    pub completed_at: Option<u64>,
+}
+
 #[derive(
     BorshDeserialize,
     BorshSerialize,
@@ -47,7 +118,6 @@ pub struct DocumentCommitment {
     pub submitted_at: u64,
 }
 
-/// A bounded, typed administrative action.
 #[derive(
     BorshDeserialize,
     BorshSerialize,
@@ -66,9 +136,6 @@ pub struct AdminProposal {
     pub expires_at: u64,
 }
 
-/// Public inspector registry record.
-///
-/// The credential itself is never stored on-chain. Only its commitment is stored.
 #[derive(
     BorshDeserialize,
     BorshSerialize,
@@ -84,7 +151,6 @@ pub struct InspectorRecord {
     pub active: bool,
 }
 
-/// Final inspection attestation. An inspector can submit only one.
 #[derive(
     BorshDeserialize,
     BorshSerialize,
@@ -101,7 +167,6 @@ pub struct InspectionAttestation {
     pub submitted_at: u64,
 }
 
-/// Assignment and attestation data are stored separately from Trade.
 #[derive(
     BorshDeserialize,
     BorshSerialize,
