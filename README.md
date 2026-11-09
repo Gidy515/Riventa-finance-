@@ -557,54 +557,40 @@ riventa/
 
 ### Requirements
 
-- Rust toolchain `1.99.1`.
-- `rustfmt` and `clippy` components.
-- The `wasm32-unknown-unknown` target for contract WASM builds.
-- Cargo.
+- Rust toolchain `1.99.1` (pinned in `rust-toolchain.toml`)
+- `rustfmt` and `clippy` components
+- The `wasm32-unknown-unknown` target for contract builds
+- Cargo
 
-The workspace uses the toolchain specified in `rust-toolchain.toml`.
-
-### Clone
+### Setup
 
 ```bash
 git clone https://github.com/Gidy515/Riventa-finance-.git Riventa
 cd Riventa
-```
-
-### Install the WASM target
-
-```bash
 rustup target add wasm32-unknown-unknown
 ```
 
-### Format
+### Verify the workspace
+
+Run these from the repository root. They reproduce the results in the [Verification](#verification) table.
 
 ```bash
-cargo fmt --all
+# Formatting
 cargo fmt --all -- --check
-```
 
-### Run the complete test suite
-
-```bash
+# Unit, integration and sandbox tests
 cargo test --workspace
+
+# WASM-target compile check
+cargo check --workspace --target wasm32-unknown-unknown
+
+# Whitespace validation
+git diff --check
 ```
 
-The integration tests use `near-workspaces` and a local NEAR sandbox environment.
+The integration tests use `near-workspaces` and run against a local NEAR sandbox.
 
-That makes the verification table reproducible from the README. The existing `git diff --check` instruction is sufficient for whitespace validation.
-
-## Final validation
-
-After adding that subsection, run:
-
-`````bash
-cargo fmt --all -- --check
-
-### Check the workspace for the WASM target
-
-````bash
-cargo check --workspace --target wasm32-unknown-unknown
+To apply formatting instead of only checking it, run `cargo fmt --all`.
 
 ### Build the contract
 
@@ -613,48 +599,11 @@ cargo build \
   -p riventa-trade-operations \
   --target wasm32-unknown-unknown \
   --release
-`````
-
-The resulting WASM artifact is produced under:
-
-```text
-target/wasm32-unknown-unknown/release/
 ```
 
-### Validate the working tree
+The WASM artifact is written to `target/wasm32-unknown-unknown/release/`.
 
-```bash
-git diff --check
-```
-
-For a reproducible milestone, record the commit hash and test output alongside any deployment artifact.
-
-## Documentation
-
-The `docs/` directory contains the detailed project specifications, architectural decisions, security invariants, and implementation guidance.
-
-Start with:
-
-- [Documentation index](docs/INDEX.md)
-- [Project overview](docs/01-project-overview.md)
-- [System architecture](docs/04-system-architecture.md)
-- [Trust boundaries and privacy](docs/05-trust-boundaries-and-privacy.md)
-- [Trade lifecycle](docs/06-trade-lifecycle.md)
-- [Smart-contract design](docs/07-smart-contract-design.md)
-- [Security model and invariants](docs/09-security-model-and-invariants.md)
-- [AI document intelligence](docs/10-ai-document-intelligence.md)
-- [Backend and integration](docs/11-backend-and-integration.md)
-- [MVP scope and roadmap](docs/12-mvp-scope-and-roadmap.md)
-- [Decision register](docs/DECISION-REGISTER.md)
-
-Relevant architectural decisions:
-
-- [ADR-009 — Customer mandates and agent execution](docs/decisions/ADR-009-customer-mandates-and-agent-execution.md)
-- [ADR-010 — NEAR Intents cross-chain settlement](docs/decisions/ADR-010-near-intents-cross-chain-settlement.md)
-
-ADR-009 is accepted. ADR-010 remains proposed and does not change the approved core escrow implementation.
-
-**Documentation reconciliation note:** Some detailed lifecycle and contract-design sections still contain older method names or describe features that have not reached implementation. For the current public API and implementation status, use the contract source and the verified milestone described in this README until those specifications are reconciled.
+For a reproducible milestone, record the commit hash and test output alongside any deployment artifact.public API and implementation status, use the contract source and the verified milestone described in this README until those specifications are reconciled.
 
 ## Limitations and non-goals
 
