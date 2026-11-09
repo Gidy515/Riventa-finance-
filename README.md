@@ -15,7 +15,7 @@ The system is designed around a clear separation of authority:
 
 ## Project status
 
-**Current contract milestone:** `030c1d5` — `feat: add mandate-based execution and escrow settlement`
+**Current contract milestone:** `f6f630f` — `feat: add timeout-based escrow recovery`
 
 The Rust/NEAR contract currently implements:
 
@@ -29,20 +29,25 @@ The Rust/NEAR contract currently implements:
 - Supplier document commitments with bounded versions.
 - Inspector registration, status management, assignment, and replacement.
 - Inspector pass/fail attestations.
+- On-chain deadlines for supplier document submission, inspector assignment, and inspection attestation.
+- Buyer-only timeout-based escrow recovery with distinct settlement reasons.
 - Buyer- or mandate-authorized payout/refund authorization.
 - NEP-141 payout and refund transfers with asynchronous callbacks.
+- Failed settlement recovery through retryable authorization and settlement records.
 
 ### Verification
 
-The workspace passed the following checks on 7 November 2026:
+The workspace passed the following checks on 9 November 2026:
 
-| Check                                    |    Result |
-| ---------------------------------------- | --------: |
-| Contract unit tests                      | 87 passed |
-| Funding and settlement integration tests |  3 passed |
-| NEAR sandbox smoke tests                 |  1 passed |
-| Rust formatting check                    |    Passed |
-| Total tests                              | 91 passed |
+| Check                                    |        Result |
+| ---------------------------------------- | ------------: |
+| Contract unit tests                      |     95 passed |
+| Funding and settlement integration tests |      3 passed |
+| NEAR sandbox smoke tests                 |      1 passed |
+| Rust formatting check                    |        Passed |
+| WASM-target workspace check              |        Passed |
+| `git diff --check`                       |        Passed |
+| **Total tests**                          | **99 passed** |
 
 Run the commands in [Development](#development) to reproduce the checks.
 
@@ -175,6 +180,10 @@ flowchart TD
     F --> G["Buyer assigns registered inspector"]
     G --> H["Inspector submits final attestation"]
 
+    D -->|7-day document deadline missed| X["Buyer initiates timeout refund"]
+    F -->|3-day assignment deadline missed| X
+    G -->|7-day inspection deadline missed| X
+
     H --> I{"Inspection outcome"}
     I -->|Pass| J{"Mandate permits agent release?"}
     J -->|Yes| K["Agent authorizes release"]
@@ -187,6 +196,7 @@ flowchart TD
     L --> P
     N --> Q["Refund authorized"]
     O --> Q
+    X --> Q
 
     P --> R["Permissionless payout trigger"]
     Q --> S["Permissionless refund trigger"]
@@ -199,7 +209,11 @@ flowchart TD
     U -->|Failure| W["Restore authorization; preserve liability"]
 ```
 
-The diagram describes the implemented funding and settlement paths. Dispute handling is part of the wider architecture, but its complete contract workflow is not included in the current verified implementation.
+The diagram describes the normal funding, inspection, authorization, and settlement paths.
+
+The contract also supports buyer-initiated timeout recovery when supplier documents, inspector assignment, or inspection attestation miss their defined deadlines. Eligible timeout refunds enter the existing refund settlement pipeline.
+
+Dispute handling is part of the wider architecture, but its complete contract workflow is not included in the current verified implementation.
 
 ## Mandates and delegated execution
 
@@ -337,16 +351,17 @@ Administrative actions use a 2-of-3 approval model.
 
 ### Settlement
 
-| Method                            | Purpose                                              |
-| --------------------------------- | ---------------------------------------------------- |
-| `authorize_mandated_release`      | Authorizes payout under the stored mandate snapshot  |
-| `authorize_mandated_refund`       | Authorizes refund under the stored mandate snapshot  |
-| `confirm_release`                 | Records buyer payout confirmation                    |
-| `choose_refund`                   | Records buyer refund choice                          |
-| `release_payment`                 | Triggers an authorized payout                        |
-| `refund_escrow`                   | Triggers an authorized refund                        |
-| `on_settlement_transfer_complete` | Processes the private asynchronous transfer callback |
-| `get_trade`                       | Reads trade state                                    |
+| Method                            | Purpose                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| `authorize_mandated_release`      | Authorizes payout under the stored mandate snapshot                               |
+| `authorize_mandated_refund`       | Authorizes refund under the stored mandate snapshot                               |
+| `confirm_release`                 | Records buyer payout confirmation                                                 |
+| `choose_refund`                   | Records buyer refund choice                                                       |
+| `refund_after_timeout`            | Allows the buyer to refund escrow after an eligible post-funding deadline expires |
+| `release_payment`                 | Triggers an authorized payout                                                     |
+| `refund_escrow`                   | Triggers an authorized refund                                                     |
+| `on_settlement_transfer_complete` | Processes the private asynchronous transfer callback                              |
+| `get_trade`                       | Reads trade state                                                                 |
 
 The token receiver `ft_on_transfer` is implemented through the NEP-141 fungible-token receiver interface.
 
@@ -386,6 +401,32 @@ Payout and refund are separate authorization and execution steps.
 The callback is protected against stale or replayed settlement results. A missing or unknown promise result must not be interpreted as successful payment.
 
 The agent authorizes within its mandate; the contract itself performs the token transfer.
+
+### Timeout-based escrow recovery
+
+The contract provides a buyer-only recovery path when a required post-funding lifecycle action is not completed within its defined deadline.
+
+| Required action                           | Deadline begins                               | Allowed duration |
+| ----------------------------------------- | --------------------------------------------- | ---------------: |
+| Supplier submits all required documents   | Successful funding                            |           7 days |
+| Buyer assigns an inspector                | Completion of all required supplier documents |           3 days |
+| Assigned inspector submits an attestation | Inspector assignment or permitted replacement |           7 days |
+
+Recovery becomes available at or after the relevant deadline. The corresponding lifecycle action is rejected once its deadline has passed.
+
+The buyer may invoke `refund_after_timeout` when an eligible deadline expires. This recovery path is independent of the trade's mandate snapshot, including when refund authority was delegated to an agent.
+
+Timeout refunds:
+
+- Always return escrow to the buyer.
+- Use the existing NEP-141 refund settlement and asynchronous callback mechanism.
+- Record one of three reasons: `SupplierDocumentsTimeout`, `InspectorAssignmentTimeout`, or `InspectionTimeout`.
+- Preserve the timeout reason if the outgoing transfer fails and is retried.
+- Do not restore consumed mandate budget.
+
+The inspector assignment deadline starts only after all required documents are complete. A permitted inspector replacement resets the inspection-attestation deadline. Only one replacement is permitted by the existing contract policy.
+
+These recovery rules do not constitute dispute resolution or arbitration. The complete resolver workflow remains unimplemented.
 
 ## Document commitments and inspection
 
@@ -551,6 +592,20 @@ cargo test --workspace
 
 The integration tests use `near-workspaces` and a local NEAR sandbox environment.
 
+That makes the verification table reproducible from the README. The existing `git diff --check` instruction is sufficient for whitespace validation.
+
+## Final validation
+
+After adding that subsection, run:
+
+`````bash
+cargo fmt --all -- --check
+
+### Check the workspace for the WASM target
+
+````bash
+cargo check --workspace --target wasm32-unknown-unknown
+
 ### Build the contract
 
 ```bash
@@ -558,7 +613,7 @@ cargo build \
   -p riventa-trade-operations \
   --target wasm32-unknown-unknown \
   --release
-```
+`````
 
 The resulting WASM artifact is produced under:
 
