@@ -29,6 +29,10 @@ pub struct Trade {
     pub created_at: u64,
     pub accept_by: u64,
     pub fund_by: Option<u64>,
+    pub funded_at: Option<u64>,
+    pub documents_completed_at: Option<u64>,
+    pub inspector_assigned_at: Option<u64>,
+    pub refund_reason: Option<SettlementReason>,
     pub inspection_criteria_commitment: [u8; 32],
     pub refund_terms_commitment: [u8; 32],
     pub agreement_commitment: [u8; 32],
@@ -82,6 +86,15 @@ pub enum SettlementKind {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[borsh(crate = "near_sdk::borsh")]
+pub enum SettlementReason {
+    Standard,
+    SupplierDocumentsTimeout,
+    InspectorAssignmentTimeout,
+    InspectionTimeout,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[borsh(crate = "near_sdk::borsh")]
 pub enum SettlementStatus {
     Pending,
     Succeeded,
@@ -96,6 +109,7 @@ pub struct SettlementRecord {
     pub recipient: AccountId,
     pub amount: u128,
     pub kind: SettlementKind,
+    pub reason: SettlementReason,
     pub status: SettlementStatus,
     pub created_at: u64,
     pub completed_at: Option<u64>,

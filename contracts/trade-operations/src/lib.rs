@@ -5,8 +5,8 @@ mod types;
 use crate::errors::{assert_account_distinct, require};
 use crate::state::{
     AdminProposal, DocumentCommitment, ExecutionMandate, InspectionAttestation, InspectionRecord,
-    InspectorRecord, SettlementKind, SettlementRecord, SettlementStatus, StorageKey, Trade,
-    TradePolicySnapshot,
+    InspectorRecord, SettlementKind, SettlementReason, SettlementRecord, SettlementStatus,
+    StorageKey, Trade, TradePolicySnapshot,
 };
 use crate::types::{AdminAction, DocumentType, InspectionOutcome, TradeState, TradeView};
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
@@ -33,6 +33,9 @@ trait ExtRiventa {
 const ACCEPTANCE_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
 const FUNDING_WINDOW_NS: u64 = 48 * 60 * 60 * 1_000_000_000;
 const ADMIN_PROPOSAL_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
+const SUPPLIER_DOCUMENT_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
+const INSPECTOR_ASSIGNMENT_WINDOW_NS: u64 = 3 * 24 * 60 * 60 * 1_000_000_000;
+const INSPECTION_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
 const REQUIRED_FUNDING_AMOUNT: u128 = 10_000_000_000;
 const MAX_FUNDING_MSG_BYTES: usize = 64;
 const ADMIN_COUNT: usize = 3;
@@ -378,6 +381,10 @@ impl Riventa {
             inspection_criteria_commitment: inspection_criteria_commitment.try_into().unwrap(),
             refund_terms_commitment: refund_terms_commitment.try_into().unwrap(),
             agreement_commitment: agreement_commitment.try_into().unwrap(),
+            funded_at: None,
+            documents_completed_at: None,
+            inspector_assigned_at: None,
+            refund_reason: None,
         };
 
         self.trades.insert(&trade_id, &trade);
@@ -478,6 +485,10 @@ impl Riventa {
             agreement_commitment: agreement_commitment
                 .try_into()
                 .expect("INVALID_AGREEMENT_COMMITMENT"),
+            funded_at: None,
+            documents_completed_at: None,
+            inspector_assigned_at: None,
+            refund_reason: None,
         };
 
         let snapshot = TradePolicySnapshot {
@@ -599,6 +610,18 @@ impl Riventa {
             "ONLY_SUPPLIER_MAY_SUBMIT_DOCUMENT",
         );
 
+        let now = env::block_timestamp();
+
+        let funded_at = trade
+            .funded_at
+            .unwrap_or_else(|| env::panic_str("TRADE_FUNDING_TIMESTAMP_MISSING"));
+
+        let document_deadline = funded_at
+            .checked_add(SUPPLIER_DOCUMENT_WINDOW_NS)
+            .expect("TIMESTAMP_OVERFLOW");
+
+        require(now < document_deadline, "SUPPLIER_DOCUMENT_DEADLINE_PASSED");
+
         require(commitment.len() == 32, "INVALID_DOCUMENT_COMMITMENT");
         require((1..=2).contains(&version), "INVALID_DOCUMENT_VERSION");
 
@@ -632,7 +655,7 @@ impl Riventa {
             version,
             commitment: document_commitment,
             submitted_by: caller,
-            submitted_at: env::block_timestamp(),
+            submitted_at: now,
         });
 
         self.document_commitments.insert(&trade_id, &documents);
@@ -640,8 +663,16 @@ impl Riventa {
         // The first valid document moves the funded trade into document review.
         if trade.state == TradeState::Funded {
             trade.state = TradeState::DocumentReview;
-            self.trades.insert(&trade_id, &trade);
         }
+
+        // Start the inspector-assignment window when all required documents exist.
+        if trade.documents_completed_at.is_none()
+            && self.required_supplier_documents_complete(trade_id)
+        {
+            trade.documents_completed_at = Some(now);
+        }
+
+        self.trades.insert(&trade_id, &trade);
 
         env::log_str(&format!(
             "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"document_commitment_recorded\",\"data\":[{{\"trade_id\":{},\"document_type\":\"{}\",\"version\":{}}}]}}",
@@ -903,6 +934,21 @@ impl Riventa {
         );
         self.require_not_admin(&inspector_account);
 
+        let now = env::block_timestamp();
+
+        let documents_completed_at = trade
+            .documents_completed_at
+            .unwrap_or_else(|| env::panic_str("DOCUMENT_COMPLETION_TIMESTAMP_MISSING"));
+
+        let assignment_deadline = documents_completed_at
+            .checked_add(INSPECTOR_ASSIGNMENT_WINDOW_NS)
+            .expect("TIMESTAMP_OVERFLOW");
+
+        require(
+            now < assignment_deadline,
+            "INSPECTOR_ASSIGNMENT_DEADLINE_PASSED",
+        );
+
         self.trade_inspections.insert(
             &trade_id,
             &InspectionRecord {
@@ -912,6 +958,7 @@ impl Riventa {
             },
         );
 
+        trade.inspector_assigned_at = Some(now);
         trade.state = TradeState::InspectionPending;
         self.trades.insert(&trade_id, &trade);
 
@@ -922,7 +969,7 @@ impl Riventa {
 
     /// Buyer may replace the assigned inspector once, before an attestation exists.
     pub fn replace_inspector(&mut self, trade_id: u64, replacement: AccountId) {
-        let trade = self.get_trade_or_panic(trade_id);
+        let mut trade = self.get_trade_or_panic(trade_id);
 
         require(
             env::predecessor_account_id() == trade.buyer,
@@ -967,10 +1014,24 @@ impl Riventa {
             "INSPECTOR_AND_RESOLVER_MUST_DIFFER",
         );
         self.require_not_admin(&replacement);
+        let now = env::block_timestamp();
+
+        let inspector_assigned_at = trade
+            .inspector_assigned_at
+            .unwrap_or_else(|| env::panic_str("INSPECTOR_ASSIGNMENT_TIMESTAMP_MISSING"));
+
+        let inspection_deadline = inspector_assigned_at
+            .checked_add(INSPECTION_WINDOW_NS)
+            .expect("TIMESTAMP_OVERFLOW");
+
+        require(now < inspection_deadline, "INSPECTION_DEADLINE_PASSED");
 
         record.assigned_inspector = replacement.clone();
         record.replacement_count = 1;
         self.trade_inspections.insert(&trade_id, &record);
+
+        trade.inspector_assigned_at = Some(now);
+        self.trades.insert(&trade_id, &trade);
 
         env::log_str(&format!(
             "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"inspector_replaced\",\"data\":[{{\"trade_id\":{trade_id},\"inspector\":\"{replacement}\"}}]}}"
@@ -985,6 +1046,8 @@ impl Riventa {
         evidence_commitment: Vec<u8>,
     ) {
         let mut trade = self.get_trade_or_panic(trade_id);
+
+        let now = env::block_timestamp();
 
         require(
             trade.state == TradeState::InspectionPending,
@@ -1015,6 +1078,16 @@ impl Riventa {
         require(inspector_is_active, "INSPECTOR_NOT_ACTIVE");
         require(record.attestation.is_none(), "INSPECTION_ALREADY_ATTESTED");
 
+        let inspector_assigned_at = trade
+            .inspector_assigned_at
+            .unwrap_or_else(|| env::panic_str("INSPECTOR_ASSIGNMENT_TIMESTAMP_MISSING"));
+
+        let inspection_deadline = inspector_assigned_at
+            .checked_add(INSPECTION_WINDOW_NS)
+            .expect("TIMESTAMP_OVERFLOW");
+
+        require(now < inspection_deadline, "INSPECTION_DEADLINE_PASSED");
+
         let evidence: [u8; 32] = evidence_commitment
             .try_into()
             .expect("INVALID_INSPECTION_EVIDENCE_COMMITMENT");
@@ -1023,7 +1096,7 @@ impl Riventa {
             outcome,
             evidence_commitment: evidence,
             inspector: caller.clone(),
-            submitted_at: env::block_timestamp(),
+            submitted_at: now,
         });
 
         trade.state = match outcome {
@@ -1042,6 +1115,93 @@ impl Riventa {
         env::log_str(&format!(
             "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"inspection_attested\",\"data\":[{{\"trade_id\":{trade_id},\"outcome\":\"{outcome_name}\",\"inspector\":\"{caller}\"}}]}}"
         ));
+    }
+
+    /// Allows the buyer to recover escrow when a required post-funding
+    /// lifecycle step misses its deadline.
+    ///
+    /// This recovery path is independent of the trade's mandate snapshot.
+    /// It does not restore consumed mandate budget.
+    pub fn refund_after_timeout(&mut self, trade_id: u64) -> Promise {
+        let caller = env::predecessor_account_id();
+        let mut trade = self.get_trade_or_panic(trade_id);
+
+        require(
+            caller == trade.buyer,
+            "ONLY_BUYER_MAY_INITIATE_TIMEOUT_REFUND",
+        );
+
+        require(
+            self.active_settlements.get(&trade_id).is_none(),
+            "SETTLEMENT_ALREADY_PENDING",
+        );
+
+        let now = env::block_timestamp();
+
+        let reason = match trade.state {
+            TradeState::Funded | TradeState::DocumentReview => {
+                if !self.required_supplier_documents_complete(trade_id) {
+                    let funded_at = trade
+                        .funded_at
+                        .unwrap_or_else(|| env::panic_str("TRADE_FUNDING_TIMESTAMP_MISSING"));
+
+                    let deadline = funded_at
+                        .checked_add(SUPPLIER_DOCUMENT_WINDOW_NS)
+                        .expect("TIMESTAMP_OVERFLOW");
+
+                    require(now >= deadline, "TIMEOUT_DEADLINE_NOT_REACHED");
+
+                    SettlementReason::SupplierDocumentsTimeout
+                } else {
+                    let documents_completed_at = trade
+                        .documents_completed_at
+                        .unwrap_or_else(|| env::panic_str("DOCUMENT_COMPLETION_TIMESTAMP_MISSING"));
+
+                    require(
+                        self.trade_inspections.get(&trade_id).is_none(),
+                        "INSPECTION_RECORD_ALREADY_EXISTS",
+                    );
+
+                    let deadline = documents_completed_at
+                        .checked_add(INSPECTOR_ASSIGNMENT_WINDOW_NS)
+                        .expect("TIMESTAMP_OVERFLOW");
+
+                    require(now >= deadline, "TIMEOUT_DEADLINE_NOT_REACHED");
+
+                    SettlementReason::InspectorAssignmentTimeout
+                }
+            }
+
+            TradeState::InspectionPending => {
+                let record = self
+                    .trade_inspections
+                    .get(&trade_id)
+                    .unwrap_or_else(|| env::panic_str("INSPECTION_RECORD_NOT_FOUND"));
+
+                require(record.attestation.is_none(), "INSPECTION_ALREADY_ATTESTED");
+
+                let inspector_assigned_at = trade
+                    .inspector_assigned_at
+                    .unwrap_or_else(|| env::panic_str("INSPECTOR_ASSIGNMENT_TIMESTAMP_MISSING"));
+
+                let deadline = inspector_assigned_at
+                    .checked_add(INSPECTION_WINDOW_NS)
+                    .expect("TIMESTAMP_OVERFLOW");
+
+                require(now >= deadline, "TIMEOUT_DEADLINE_NOT_REACHED");
+
+                SettlementReason::InspectionTimeout
+            }
+
+            _ => env::panic_str("NO_ELIGIBLE_TIMEOUT_REFUND"),
+        };
+
+        trade.refund_reason = Some(reason);
+        trade.state = TradeState::RefundAuthorized;
+
+        self.trades.insert(&trade_id, &trade);
+
+        self.initiate_settlement(trade_id, SettlementKind::Refund)
     }
 
     /// Agent authorizes supplier payout under the immutable trade policy snapshot.
@@ -1110,7 +1270,10 @@ impl Riventa {
 
         trade.state = match kind {
             SettlementKind::Payout => TradeState::ReleaseAuthorized,
-            SettlementKind::Refund => TradeState::RefundAuthorized,
+            SettlementKind::Refund => {
+                trade.refund_reason = Some(SettlementReason::Standard);
+                TradeState::RefundAuthorized
+            }
         };
 
         self.trades.insert(&trade_id, &trade);
@@ -1167,7 +1330,10 @@ impl Riventa {
 
         trade.state = match kind {
             SettlementKind::Payout => TradeState::ReleaseAuthorized,
-            SettlementKind::Refund => TradeState::RefundAuthorized,
+            SettlementKind::Refund => {
+                trade.refund_reason = Some(SettlementReason::Standard);
+                TradeState::RefundAuthorized
+            }
         };
 
         self.trades.insert(&trade_id, &trade);
@@ -1261,12 +1427,18 @@ impl Riventa {
             .checked_add(1)
             .expect("SETTLEMENT_ID_OVERFLOW");
 
+        let reason = match kind {
+            SettlementKind::Payout => SettlementReason::Standard,
+            SettlementKind::Refund => trade.refund_reason.unwrap_or(SettlementReason::Standard),
+        };
+
         let settlement = SettlementRecord {
             id: settlement_id,
             trade_id,
             recipient: recipient.clone(),
             amount: trade.amount,
             kind,
+            reason,
             status: SettlementStatus::Pending,
             created_at: env::block_timestamp(),
             completed_at: None,
@@ -1531,6 +1703,7 @@ impl FungibleTokenReceiver for Riventa {
         }
 
         trade.state = TradeState::Funded;
+        trade.funded_at = Some(env::block_timestamp());
         self.trades.insert(&trade.id, &trade);
 
         env::log_str(&format!(
@@ -2030,6 +2203,10 @@ mod tests {
         );
 
         assert_eq!(unused, 0);
+        let funded_trade = contract.get_trade(trade_id).unwrap();
+        assert_eq!(funded_trade.funded_at, Some(5_000));
+        assert_eq!(funded_trade.documents_completed_at, None);
+        assert_eq!(funded_trade.inspector_assigned_at, None);
         assert_eq!(
             contract.get_trade(trade_id).unwrap().state,
             TradeState::Funded
@@ -2547,6 +2724,28 @@ mod tests {
     }
 
     #[test]
+    fn completing_required_documents_records_timestamp_once() {
+        let mut contract = contract();
+        let id = funded_trade(&mut contract, 1_000);
+
+        add_required_supplier_documents(&mut contract, id, 3_000);
+
+        let trade = contract.get_trade(id).unwrap();
+        assert_eq!(trade.documents_completed_at, Some(3_002));
+        assert_eq!(trade.funded_at, Some(2_000));
+        assert_eq!(trade.inspector_assigned_at, None);
+
+        // A later document version must not restart the assignment window.
+        context("supplier.testnet", 5_000);
+        contract.record_document_commitment(id, DocumentType::CommercialInvoice, 2, commitment());
+
+        assert_eq!(
+            contract.get_trade(id).unwrap().documents_completed_at,
+            Some(3_002)
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "ONLY_SUPPLIER_MAY_SUBMIT_DOCUMENT")]
     fn buyer_cannot_submit_supplier_document() {
         let mut contract = contract();
@@ -2923,6 +3122,9 @@ mod tests {
             TradeState::InspectionPending
         );
 
+        let trade = contract.get_trade(trade_id).unwrap();
+        assert_eq!(trade.inspector_assigned_at, Some(14_000));
+
         let record = contract.get_inspection_record(trade_id).unwrap();
 
         assert_eq!(record.assigned_inspector, account("inspector.testnet"));
@@ -2944,8 +3146,18 @@ mod tests {
         context("buyer.testnet", 13_000);
         contract.assign_inspector(trade_id, account("inspector1.testnet"));
 
+        assert_eq!(
+            contract.get_trade(trade_id).unwrap().inspector_assigned_at,
+            Some(13_000)
+        );
+
         context("buyer.testnet", 14_000);
         contract.replace_inspector(trade_id, account("inspector2.testnet"));
+
+        assert_eq!(
+            contract.get_trade(trade_id).unwrap().inspector_assigned_at,
+            Some(14_000)
+        );
 
         let record = contract.get_inspection_record(trade_id).unwrap();
 
@@ -3427,6 +3639,314 @@ mod tests {
         assert_eq!(
             contract.trades.get(&trade_id).unwrap().state,
             TradeState::RefundAuthorized
+        );
+        assert_eq!(contract.active_settlements.get(&trade_id), None);
+    }
+
+    #[test]
+    fn supplier_document_timeout_refunds_at_exact_deadline() {
+        let mut contract = contract();
+        let trade_id = funded_trade(&mut contract, 1_000);
+
+        let funded_at = contract.trades.get(&trade_id).unwrap().funded_at.unwrap();
+        let deadline = funded_at + SUPPLIER_DOCUMENT_WINDOW_NS;
+
+        // One nanosecond before the deadline is not eligible.
+        context("buyer.testnet", deadline - 1);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.refund_after_timeout(trade_id).detach();
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::Funded
+        );
+
+        // Recovery becomes available exactly at the deadline.
+        context("buyer.testnet", deadline);
+        let _promise = contract.refund_after_timeout(trade_id);
+
+        let settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+        let settlement = contract.settlement_records.get(&settlement_id).unwrap();
+
+        assert_eq!(settlement.kind, SettlementKind::Refund);
+        assert_eq!(
+            settlement.reason,
+            SettlementReason::SupplierDocumentsTimeout
+        );
+        assert_eq!(settlement.recipient, account("buyer.testnet"));
+        assert_eq!(settlement.status, SettlementStatus::Pending);
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::RefundPending
+        );
+    }
+
+    #[test]
+    fn inspector_assignment_timeout_refunds_at_exact_deadline() {
+        let mut contract = contract();
+        let trade_id = funded_trade(&mut contract, 1_000);
+
+        add_required_supplier_documents(&mut contract, trade_id, 3_000);
+
+        let trade = contract.trades.get(&trade_id).unwrap();
+        let documents_completed_at = trade.documents_completed_at.unwrap();
+        let deadline = documents_completed_at + INSPECTOR_ASSIGNMENT_WINDOW_NS;
+
+        assert_eq!(trade.state, TradeState::DocumentReview);
+        assert!(contract.trade_inspections.get(&trade_id).is_none());
+
+        // Recovery must not be available one nanosecond before expiry.
+        context("buyer.testnet", deadline - 1);
+        let early_attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.refund_after_timeout(trade_id).detach();
+        }));
+
+        assert!(early_attempt.is_err());
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::DocumentReview
+        );
+        assert!(contract.active_settlements.get(&trade_id).is_none());
+
+        context("buyer.testnet", deadline);
+        let _promise = contract.refund_after_timeout(trade_id);
+
+        let settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+        let settlement = contract.settlement_records.get(&settlement_id).unwrap();
+
+        assert_eq!(settlement.kind, SettlementKind::Refund);
+        assert_eq!(
+            settlement.reason,
+            SettlementReason::InspectorAssignmentTimeout
+        );
+        assert_eq!(settlement.recipient, account("buyer.testnet"));
+        assert_eq!(settlement.status, SettlementStatus::Pending);
+    }
+
+    #[test]
+    fn inspection_timeout_refunds_at_exact_deadline() {
+        let mut contract = contract();
+        let trade_id = inspection_pending_trade(&mut contract, "inspector.testnet", 1_000);
+
+        let trade = contract.trades.get(&trade_id).unwrap();
+        let assigned_at = trade.inspector_assigned_at.unwrap();
+        let deadline = assigned_at + INSPECTION_WINDOW_NS;
+
+        let inspection = contract.trade_inspections.get(&trade_id).unwrap();
+        assert!(inspection.attestation.is_none());
+
+        // Recovery must not be available one nanosecond before expiry.
+        context("buyer.testnet", deadline - 1);
+        let early_attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            contract.refund_after_timeout(trade_id).detach();
+        }));
+
+        assert!(early_attempt.is_err());
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::InspectionPending
+        );
+        assert!(contract.active_settlements.get(&trade_id).is_none());
+
+        context("buyer.testnet", deadline);
+        let _promise = contract.refund_after_timeout(trade_id);
+
+        let settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+        let settlement = contract.settlement_records.get(&settlement_id).unwrap();
+
+        assert_eq!(settlement.kind, SettlementKind::Refund);
+        assert_eq!(settlement.reason, SettlementReason::InspectionTimeout);
+        assert_eq!(settlement.recipient, account("buyer.testnet"));
+        assert_eq!(settlement.status, SettlementStatus::Pending);
+    }
+
+    #[test]
+    #[should_panic(expected = "NO_ELIGIBLE_TIMEOUT_REFUND")]
+    fn attested_inspection_cannot_use_timeout_refund() {
+        let mut contract = contract();
+
+        let trade_id = inspection_pending_trade(&mut contract, "inspector.testnet", 1_000);
+
+        context("inspector.testnet", 20_000);
+        contract.submit_inspection_attestation(trade_id, InspectionOutcome::Pass, commitment());
+
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::InspectionPassed
+        );
+
+        // Even after the original inspection deadline, an attested trade
+        // must use the ordinary settlement authorization path.
+        let assigned_at = contract
+            .trades
+            .get(&trade_id)
+            .unwrap()
+            .inspector_assigned_at
+            .unwrap();
+
+        let deadline = assigned_at + INSPECTION_WINDOW_NS;
+
+        context("buyer.testnet", deadline);
+        contract.refund_after_timeout(trade_id).detach();
+    }
+
+    #[test]
+    #[should_panic(expected = "ONLY_BUYER_MAY_INITIATE_TIMEOUT_REFUND")]
+    fn non_buyer_cannot_initiate_timeout_refund() {
+        let mut contract = contract();
+        let trade_id = funded_trade(&mut contract, 1_000);
+
+        let funded_at = contract.trades.get(&trade_id).unwrap().funded_at.unwrap();
+        let deadline = funded_at + SUPPLIER_DOCUMENT_WINDOW_NS;
+
+        context("attacker.testnet", deadline);
+        contract.refund_after_timeout(trade_id).detach();
+    }
+
+    #[test]
+    fn timeout_recovery_bypasses_delegated_refund_authority_without_restoring_budget() {
+        let mut contract = contract();
+
+        // This mandate explicitly delegates refund authority to its agent.
+        let mandate_id = create_test_mandate_with_permissions(
+            &mut contract,
+            1_000,
+            REQUIRED_FUNDING_AMOUNT * 2,
+            u64::MAX,
+            true,
+            true,
+        );
+
+        let trade_id = create_agent_trade(&mut contract, mandate_id, 2_000);
+
+        context("supplier.testnet", 3_000);
+        contract.accept_trade(trade_id);
+
+        let unused = receive(
+            &mut contract,
+            "sdd.testnet",
+            "buyer.testnet",
+            4_000,
+            REQUIRED_FUNDING_AMOUNT,
+            &format!(r#"{{"trade_id":{trade_id}}}"#),
+        );
+
+        assert_eq!(unused, 0);
+
+        let mandate_before = contract.mandates.get(&mandate_id).unwrap();
+
+        assert_eq!(mandate_before.reserved_budget, 0);
+        assert_eq!(mandate_before.consumed_budget, REQUIRED_FUNDING_AMOUNT);
+        assert!(mandate_before.allow_refund_after_fail);
+
+        let snapshot = contract.trade_policy_snapshots.get(&trade_id).unwrap();
+        assert!(snapshot.allow_refund_after_fail);
+
+        let funded_at = contract.trades.get(&trade_id).unwrap().funded_at.unwrap();
+        let deadline = funded_at + SUPPLIER_DOCUMENT_WINDOW_NS;
+
+        // The agent's delegated refund permission is not needed for timeout recovery.
+        context("buyer.testnet", deadline);
+        let _promise = contract.refund_after_timeout(trade_id);
+
+        let settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+        let settlement = contract.settlement_records.get(&settlement_id).unwrap();
+
+        assert_eq!(
+            settlement.reason,
+            SettlementReason::SupplierDocumentsTimeout
+        );
+        assert_eq!(settlement.recipient, account("buyer.testnet"));
+        assert_eq!(settlement.status, SettlementStatus::Pending);
+
+        // A timeout refund does not reverse consumed mandate budget.
+        let mandate_after = contract.mandates.get(&mandate_id).unwrap();
+
+        assert_eq!(mandate_after.reserved_budget, 0);
+        assert_eq!(mandate_after.consumed_budget, REQUIRED_FUNDING_AMOUNT);
+    }
+
+    #[test]
+    fn failed_timeout_refund_preserves_reason_and_allows_retry() {
+        let mut contract = contract();
+        let trade_id = funded_trade(&mut contract, 1_000);
+
+        let funded_at = contract.trades.get(&trade_id).unwrap().funded_at.unwrap();
+        let deadline = funded_at + SUPPLIER_DOCUMENT_WINDOW_NS;
+
+        context("buyer.testnet", deadline);
+        let _promise = contract.refund_after_timeout(trade_id);
+
+        let first_settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+
+        let first_settlement = contract
+            .settlement_records
+            .get(&first_settlement_id)
+            .unwrap();
+
+        assert_eq!(
+            first_settlement.reason,
+            SettlementReason::SupplierDocumentsTimeout
+        );
+
+        // Simulate a failed NEP-141 transfer callback.
+        settlement_callback_context(near_sdk::PromiseResult::Failed);
+
+        assert!(!contract.on_settlement_transfer_complete(trade_id, first_settlement_id));
+
+        let failed = contract
+            .settlement_records
+            .get(&first_settlement_id)
+            .unwrap();
+
+        assert_eq!(failed.status, SettlementStatus::Failed);
+        assert_eq!(failed.reason, SettlementReason::SupplierDocumentsTimeout);
+        assert_eq!(contract.active_settlements.get(&trade_id), None);
+
+        let trade = contract.trades.get(&trade_id).unwrap();
+
+        assert_eq!(trade.state, TradeState::RefundAuthorized);
+        assert_eq!(
+            trade.refund_reason,
+            Some(SettlementReason::SupplierDocumentsTimeout)
+        );
+
+        // Any account may trigger a previously authorized refund.
+        context("keeper.testnet", deadline + 1);
+        let _retry_promise = contract.refund_escrow(trade_id);
+
+        let retry_settlement_id = contract.active_settlements.get(&trade_id).unwrap();
+
+        assert_ne!(retry_settlement_id, first_settlement_id);
+
+        let retry = contract
+            .settlement_records
+            .get(&retry_settlement_id)
+            .unwrap();
+
+        assert_eq!(retry.kind, SettlementKind::Refund);
+        assert_eq!(retry.reason, SettlementReason::SupplierDocumentsTimeout);
+        assert_eq!(retry.recipient, account("buyer.testnet"));
+        assert_eq!(retry.status, SettlementStatus::Pending);
+
+        // The retry can complete normally.
+        settlement_callback_context(near_sdk::PromiseResult::Successful(vec![]));
+
+        assert!(contract.on_settlement_transfer_complete(trade_id, retry_settlement_id));
+
+        let completed = contract
+            .settlement_records
+            .get(&retry_settlement_id)
+            .unwrap();
+
+        assert_eq!(completed.status, SettlementStatus::Succeeded);
+        assert_eq!(completed.reason, SettlementReason::SupplierDocumentsTimeout);
+        assert_eq!(
+            contract.trades.get(&trade_id).unwrap().state,
+            TradeState::Refunded
         );
         assert_eq!(contract.active_settlements.get(&trade_id), None);
     }

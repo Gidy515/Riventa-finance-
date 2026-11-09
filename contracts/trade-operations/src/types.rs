@@ -41,6 +41,9 @@ pub struct TradeView {
     pub created_at: u64,
     pub accept_by: u64,
     pub fund_by: Option<u64>,
+    pub funded_at: Option<u64>,
+    pub documents_completed_at: Option<u64>,
+    pub inspector_assigned_at: Option<u64>,
 }
 
 impl From<Trade> for TradeView {
@@ -56,6 +59,9 @@ impl From<Trade> for TradeView {
             created_at: trade.created_at,
             accept_by: trade.accept_by,
             fund_by: trade.fund_by,
+            funded_at: trade.funded_at,
+            documents_completed_at: trade.documents_completed_at,
+            inspector_assigned_at: trade.inspector_assigned_at,
         }
     }
 }
