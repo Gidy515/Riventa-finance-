@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+schemars = "=0.8.22"
 near-contract-standards = "=5.29.1"
 near-sdk = { version = "=5.29.1", features = ["legacy"] }
 

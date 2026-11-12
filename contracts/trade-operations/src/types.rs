@@ -6,7 +6,16 @@ use near_sdk::{
 };
 
 #[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
+    schemars::JsonSchema,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
 )]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde")]
@@ -28,13 +37,17 @@ pub enum TradeState {
     Cancelled,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TradeView {
     pub id: u64,
+    #[schemars(with = "String")]
     pub buyer: AccountId,
+    #[schemars(with = "String")]
     pub supplier: AccountId,
+    #[schemars(with = "String")]
     pub resolver: AccountId,
+    #[schemars(with = "String")]
     pub payment_token: AccountId,
     pub amount: String,
     pub state: TradeState,
@@ -67,7 +80,16 @@ impl From<Trade> for TradeView {
 }
 
 #[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
+    schemars::JsonSchema,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
 )]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde", rename_all = "snake_case")]
@@ -96,15 +118,27 @@ impl DocumentType {
 }
 
 /// The only administrative actions the multisig can authorize.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(
+    schemars::JsonSchema,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+)]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde", rename_all = "snake_case")]
 pub enum AdminAction {
     RegisterInspector {
+        #[schemars(with = "String")]
         account_id: AccountId,
         credential_commitment: [u8; 32],
     },
     SetInspectorStatus {
+        #[schemars(with = "String")]
         account_id: AccountId,
         active: bool,
     },
@@ -113,7 +147,16 @@ pub enum AdminAction {
 }
 
 #[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
+    schemars::JsonSchema,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
 )]
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde", rename_all = "snake_case")]

@@ -27,3 +27,6 @@ sandbox-data/
 # Logs and generated files
 *.log
 .DS_Store
+# Build artifacts
+/backend/dist/
+*.tsbuildinfo

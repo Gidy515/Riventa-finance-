@@ -1,0 +1,16 @@
+{
+  "name": "riventa",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @riventa/frontend --filter @riventa/backend dev",
+    "dev:frontend": "pnpm --filter @riventa/frontend dev",
+    "dev:backend": "pnpm --filter @riventa/backend dev",
+    "build": "pnpm --recursive build",
+    "typecheck": "pnpm --recursive typecheck"
+  }
+}

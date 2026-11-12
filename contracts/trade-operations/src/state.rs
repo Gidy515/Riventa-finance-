@@ -116,6 +116,7 @@ pub struct SettlementRecord {
 }
 
 #[derive(
+    schemars::JsonSchema,
     BorshDeserialize,
     BorshSerialize,
     near_sdk::serde::Serialize,
@@ -128,11 +129,13 @@ pub struct DocumentCommitment {
     pub document_type: DocumentType,
     pub version: u8,
     pub commitment: [u8; 32],
+    #[schemars(with = "String")]
     pub submitted_by: AccountId,
     pub submitted_at: u64,
 }
 
 #[derive(
+    schemars::JsonSchema,
     BorshDeserialize,
     BorshSerialize,
     near_sdk::serde::Serialize,
@@ -144,13 +147,16 @@ pub struct DocumentCommitment {
 pub struct AdminProposal {
     pub id: u64,
     pub action: AdminAction,
+    #[schemars(with = "String")]
     pub proposer: AccountId,
+    #[schemars(with = "Vec<String>")]
     pub approvals: Vec<AccountId>,
     pub created_at: u64,
     pub expires_at: u64,
 }
 
 #[derive(
+    schemars::JsonSchema,
     BorshDeserialize,
     BorshSerialize,
     near_sdk::serde::Serialize,
@@ -166,6 +172,7 @@ pub struct InspectorRecord {
 }
 
 #[derive(
+    schemars::JsonSchema,
     BorshDeserialize,
     BorshSerialize,
     near_sdk::serde::Serialize,
@@ -177,11 +184,13 @@ pub struct InspectorRecord {
 pub struct InspectionAttestation {
     pub outcome: InspectionOutcome,
     pub evidence_commitment: [u8; 32],
+    #[schemars(with = "String")]
     pub inspector: AccountId,
     pub submitted_at: u64,
 }
 
 #[derive(
+    schemars::JsonSchema,
     BorshDeserialize,
     BorshSerialize,
     near_sdk::serde::Serialize,
@@ -191,6 +200,7 @@ pub struct InspectionAttestation {
 #[borsh(crate = "near_sdk::borsh")]
 #[serde(crate = "near_sdk::serde")]
 pub struct InspectionRecord {
+    #[schemars(with = "String")]
     pub assigned_inspector: AccountId,
     pub replacement_count: u8,
     pub attestation: Option<InspectionAttestation>,

@@ -249,6 +249,11 @@ impl Riventa {
             .expect("MANDATE_VERSION_OVERFLOW");
 
         self.mandates.insert(&mandate_id, &mandate);
+
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"mandate_renewed\",\"data\":[{{\"mandate_id\":{mandate_id},\"version\":{}}}]}}",
+            mandate.version
+        ));
     }
 
     /// Buyer revokes a mandate. Existing trade snapshots remain immutable.
@@ -266,6 +271,11 @@ impl Riventa {
             .expect("MANDATE_VERSION_OVERFLOW");
 
         self.mandates.insert(&mandate_id, &mandate);
+
+        env::log_str(&format!(
+            "EVENT_JSON:{{\"standard\":\"riventa\",\"version\":\"1.0.0\",\"event\":\"mandate_revoked\",\"data\":[{{\"mandate_id\":{mandate_id},\"version\":{}}}]}}",
+            mandate.version
+        ));
     }
 
     /// Returns the mandate's current policy and accounting state.
@@ -1558,6 +1568,12 @@ impl Riventa {
 
     pub fn get_inspection_record(&self, trade_id: u64) -> Option<InspectionRecord> {
         self.trade_inspections.get(&trade_id)
+    }
+
+    pub fn get_settlement_record(&self, settlement_id: u64) -> Option<SettlementRecordView> {
+        self.settlement_records
+            .get(&settlement_id)
+            .map(SettlementRecordView::from)
     }
 
     pub fn get_trade(&self, trade_id: u64) -> Option<TradeView> {
@@ -4315,6 +4331,54 @@ impl From<TradePolicySnapshot> for TradePolicySnapshotView {
             allow_release_after_pass: s.allow_release_after_pass,
             allow_refund_after_fail: s.allow_refund_after_fail,
             mandate_expires_at: s.mandate_expires_at,
+        }
+    }
+}
+
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct SettlementRecordView {
+    pub id: u64,
+    pub trade_id: u64,
+    pub recipient: AccountId,
+    pub amount: U128,
+    pub kind: String,
+    pub reason: String,
+    pub status: String,
+    pub created_at: u64,
+    pub completed_at: Option<u64>,
+}
+
+impl From<SettlementRecord> for SettlementRecordView {
+    fn from(record: SettlementRecord) -> Self {
+        let kind = match record.kind {
+            SettlementKind::Payout => "payout",
+            SettlementKind::Refund => "refund",
+        };
+
+        let reason = match record.reason {
+            SettlementReason::Standard => "standard",
+            SettlementReason::SupplierDocumentsTimeout => "supplier_documents_timeout",
+            SettlementReason::InspectorAssignmentTimeout => "inspector_assignment_timeout",
+            SettlementReason::InspectionTimeout => "inspection_timeout",
+        };
+
+        let status = match record.status {
+            SettlementStatus::Pending => "pending",
+            SettlementStatus::Succeeded => "succeeded",
+            SettlementStatus::Failed => "failed",
+        };
+
+        Self {
+            id: record.id,
+            trade_id: record.trade_id,
+            recipient: record.recipient,
+            amount: U128(record.amount),
+            kind: kind.to_string(),
+            reason: reason.to_string(),
+            status: status.to_string(),
+            created_at: record.created_at,
+            completed_at: record.completed_at,
         }
     }
 }
