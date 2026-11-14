@@ -5,7 +5,10 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="site-container footer-inner">
         <div>
-          <p className="footer-brand">{siteContent.brand}</p>
+          <p className="footer-brand">
+            <img className="brand-mark" src="/riventa-mark.svg" alt="" />
+            <span>{siteContent.brand}</span>
+          </p>
           <p>{siteContent.footer.note}</p>
         </div>
         <p className="footer-disclaimer">{siteContent.footer.disclaimer}</p>

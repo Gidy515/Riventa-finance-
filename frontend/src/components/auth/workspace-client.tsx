@@ -632,7 +632,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       <main className="workspace-screen">
         <div className="workspace-auth-layout">
           <a className="workspace-wordmark" href="/">
-            <span className="workspace-wordmark-mark">R</span>
+            <img className="brand-mark" src="/riventa-mark.svg" alt="" />
             Riventa
           </a>
 
@@ -736,7 +736,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     <main className="workspace-screen">
       <header className="workspace-topbar">
         <a className="workspace-wordmark" href="/">
-          <span className="workspace-wordmark-mark">R</span>
+          <img className="brand-mark" src="/riventa-mark.svg" alt="" />
           Riventa
           <span className="workspace-topbar-label">WORKSPACE</span>
         </a>

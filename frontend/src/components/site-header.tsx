@@ -6,7 +6,8 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="site-container header-inner">
         <a className="wordmark" href="/" aria-label={siteContent.brand}>
-          {siteContent.brand}
+          <img className="brand-mark" src="/riventa-mark.svg" alt="" />
+          <span>{siteContent.brand}</span>
         </a>
 
         <nav
