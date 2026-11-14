@@ -34,13 +34,13 @@ export const siteContent = {
     { label: "Agent limits", href: "#agent-limits" },
     { label: "Build status", href: "#build-status" },
     { label: "Developers", href: "#developers" },
-    { label: "Open workspace", href: "/workspace" },
+    { label: "Get started", href: "/workspace" },
   ],
   hero: {
     eyebrow: "TRADE OPERATIONS · NEAR",
-    title: "Pay suppliers only when the goods pass inspection.",
+    title: "Confidence for buyers. Certainty for suppliers.",
     description:
-      "Your payment stays in escrow until supplier documents are recorded and an independent inspector confirms the goods passed. An agent can act only within the limits you set.",
+      "Agree on trade terms, verify delivery independently, and manage payments through a transparent process designed to give buyers confidence and suppliers greater payment certainty. Every action remains within the agreed terms.",
     primaryAction: "Watch the demo",
     secondaryAction: "View the code",
     visualLabel: "DOCUMENT RECORD",

@@ -15,7 +15,7 @@ export function HeroSection() {
             <p className="hero-description">{hero.description}</p>
 
             <div className="hero-actions">
-              <ActionLink href="/workspace" label="Open workspace" />
+              <ActionLink href="/workspace" label="Get started" />
               <ActionLink
                 href={links.repository}
                 label={hero.secondaryAction}
