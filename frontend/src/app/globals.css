@@ -2298,3 +2298,79 @@ a:focus-visible {
     flex-direction: column;
   }
 }
+
+/* Riventa wallet-backed trade lifecycle */
+.workspace-trade-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+  max-width: 760px;
+}
+
+.workspace-trade-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary, #a9a9b8);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.workspace-trade-form input,
+.workspace-trade-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  padding: 13px 14px;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: normal;
+  outline: none;
+}
+
+.workspace-trade-form input:focus,
+.workspace-trade-form textarea:focus {
+  border-color: #8b79ed;
+}
+
+.workspace-trade-form textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.workspace-trade-form input:disabled,
+.workspace-trade-form textarea:disabled {
+  opacity: 0.6;
+}
+
+.workspace-secondary-button {
+  margin-top: 14px;
+  border: 1px solid rgba(139, 121, 237, 0.5);
+  border-radius: 8px;
+  padding: 10px 15px;
+  background: rgba(139, 121, 237, 0.12);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.workspace-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.workspace-form-hint,
+.workspace-wallet-connected {
+  color: #a9a9b8;
+  font-size: 12px;
+}
+
+.workspace-transaction-message {
+  margin-top: 18px;
+  color: #8de0bb;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}

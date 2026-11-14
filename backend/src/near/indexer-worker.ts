@@ -86,6 +86,9 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
       throw new Error("INDEXER_NEXT_BLOCK_HEIGHT_INVALID");
     }
 
+    const blockStartedAt = Date.now();
+    const timings: Record<string, number> = {};
+
     // Enforce a conservative Data Server request rate during catch-up.
     const elapsed = Date.now() - lastDataServerRequestAt;
     const remaining = DATA_SERVER_MIN_INTERVAL_MS - elapsed;
@@ -96,8 +99,13 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
 
     if (shouldStop()) break;
 
+    let stageStartedAt = Date.now();
     const rpcBlock = await getBlockByHeight(rpcUrl, nextHeight);
+    timings.rpcBlockMs = Date.now() - stageStartedAt;
+
+    stageStartedAt = Date.now();
     const data = await getDataServerBlock(nextHeight);
+    timings.dataServerMs = Date.now() - stageStartedAt;
     lastDataServerRequestAt = Date.now();
 
     assertSameBlock(rpcBlock, data.block);
@@ -111,6 +119,7 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
     // Fetch all contract views at this exact finalized block before opening
     // the database transaction.
     const plan = buildProjectionFetchPlan(events);
+    stageStartedAt = Date.now();
     const views = await fetchBlockProjectionViews({
       rpcUrl,
       contractId,
@@ -120,7 +129,9 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
       },
       plan
     });
+    timings.projectionMs = Date.now() - stageStartedAt;
 
+    stageStartedAt = Date.now();
     const result = await persistFinalizedBlock({
       network,
       contractId,
@@ -128,9 +139,13 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
       events,
       views
     });
+    timings.persistMs = Date.now() - stageStartedAt;
 
     // Read back the committed checkpoint before advancing locally.
+    stageStartedAt = Date.now();
     const updated = await getIndexerCheckpoint(network, contractId);
+    timings.checkpointReadbackMs = Date.now() - stageStartedAt;
+    timings.totalMs = Date.now() - blockStartedAt;
 
     if (
       !updated ||
@@ -147,7 +162,8 @@ async function pollOnce(shouldStop: () => boolean): Promise<void> {
       network,
       contractId,
       ...result,
-      blockHash: data.block.header.hash
+      blockHash: data.block.header.hash,
+      timings
     });
   }
 }

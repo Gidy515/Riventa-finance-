@@ -1,5 +1,4 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4000";
 
 export interface AuthSession {
   network: string;
@@ -22,10 +21,7 @@ interface ErrorResponse {
   error?: string;
 }
 
-async function request<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
 
   try {
@@ -35,8 +31,8 @@ async function request<T>(
       cache: "no-store",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers
-      }
+        ...init.headers,
+      },
     });
   } catch {
     throw new Error("Unable to reach the Riventa API.");
@@ -46,7 +42,7 @@ async function request<T>(
     let errorCode = "REQUEST_FAILED";
 
     try {
-      const body = await response.json() as ErrorResponse;
+      const body = (await response.json()) as ErrorResponse;
       errorCode = body.error ?? errorCode;
     } catch {
       // Keep the generic error when the response is not JSON.
@@ -58,12 +54,10 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
-export function createChallenge(
-  accountId: string
-): Promise<ChallengeResponse> {
+export function createChallenge(accountId: string): Promise<ChallengeResponse> {
   return request<ChallengeResponse>("/auth/challenge", {
     method: "POST",
-    body: JSON.stringify({ accountId })
+    body: JSON.stringify({ accountId }),
   });
 }
 
@@ -79,7 +73,7 @@ export function verifyChallenge(input: {
 }> {
   return request("/auth/verify", {
     method: "POST",
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }
 
@@ -94,10 +88,9 @@ export function logout(): Promise<{
   authenticated: false;
 }> {
   return request("/auth/logout", {
-    method: "POST"
+    method: "POST",
   });
 }
-
 
 export interface WorkspaceStatus {
   authenticated: true;
@@ -157,6 +150,44 @@ export interface TradeRecord {
   documentsCompletedAtNs: string | null;
   inspectorAssignedAtNs: string | null;
   observedBlockHeight: string | null;
+}
+
+export interface TradeLifecycle {
+  policySnapshot: {
+    buyer: string;
+    agent: string;
+    allowReleaseAfterPass: boolean;
+    allowRefundAfterFail: boolean;
+  } | null;
+  documents: Array<{
+    documentType: string;
+    version: number;
+    commitment: string;
+    submittedBy: string;
+    submittedAtNs: string;
+  }>;
+  inspection: {
+    assignedInspector: string;
+    replacementCount: number;
+    outcome: string | null;
+    attestingInspector: string | null;
+    evidenceCommitment: string | null;
+    submittedAtNs: string | null;
+  } | null;
+  settlements: Array<{
+    projectionId: string;
+    settlementId: string | null;
+    kind: string;
+    reason: string | null;
+    status: string;
+    authorizationSource: string | null;
+    authorizedBy: string | null;
+    recipientAccount: string | null;
+    amountRaw: string | null;
+    initiatedAtNs: string | null;
+    completedAtNs: string | null;
+    transferResult: string | null;
+  }>;
 }
 
 export interface TradeCursor {
@@ -227,19 +258,28 @@ export function listTrades(
       state: parameters.state,
       limit: parameters.limit,
       cursorCreatedAtNs: parameters.cursor?.createdAtNs,
-      cursorTradeId: parameters.cursor?.tradeId
+      cursorTradeId: parameters.cursor?.tradeId,
     })}`
   );
 }
 
-export async function getTradeById(
-  tradeId: string
-): Promise<TradeRecord> {
+export async function getTradeById(tradeId: string): Promise<TradeRecord> {
   const result = await request<{ trade: TradeRecord }>(
     `/workspace/trades/${encodeURIComponent(tradeId)}`
   );
 
   return result.trade;
+}
+
+export async function getTradeLifecycle(
+  tradeId: string
+): Promise<TradeLifecycle> {
+  const result = await request<{
+    tradeId: string;
+    lifecycle: TradeLifecycle;
+  }>(`/workspace/trades/${encodeURIComponent(tradeId)}/lifecycle`);
+
+  return result.lifecycle;
 }
 
 export function listMandates(
@@ -248,7 +288,7 @@ export function listMandates(
   return request<MandatePage>(
     `/workspace/mandates${buildQueryString({
       limit: parameters.limit,
-      beforeMandateId: parameters.beforeMandateId
+      beforeMandateId: parameters.beforeMandateId,
     })}`
   );
 }

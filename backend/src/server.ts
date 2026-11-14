@@ -75,15 +75,34 @@ async function shutdown(signal: string): Promise<void> {
 
   app.log.info({ signal }, "Shutting down Riventa API");
 
+  const failures: unknown[] = [];
+
   try {
     if (stopNearIndexer) {
       await stopNearIndexer();
       stopNearIndexer = undefined;
     }
+  } catch (error) {
+    failures.push(error);
+    app.log.error({ err: error }, "Failed to stop NEAR indexer");
+  }
 
+  try {
     await app.close();
-  } finally {
+  } catch (error) {
+    failures.push(error);
+    app.log.error({ err: error }, "Failed to close Fastify");
+  }
+
+  try {
     await database.end();
+  } catch (error) {
+    failures.push(error);
+    app.log.error({ err: error }, "Failed to close database pool");
+  }
+
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "Riventa shutdown encountered errors");
   }
 }
 

@@ -64,8 +64,79 @@ export interface IndexedContractEvent {
 const DATA_SERVER_BASE_URL = "https://testnet.neardata.xyz/v0";
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
+const MAX_ATTEMPTS = 5;
+const BASE_BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 8_000;
+const MAX_JITTER_MS = 250;
+const MAX_RETRY_AFTER_MS = 30_000;
 
-async function getHttps(
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRYABLE_NETWORK_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "EPIPE"
+]);
+
+class DataServerHttpError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly retryAfterMs?: number
+  ) {
+    super(`NEAR_DATA_SERVER_HTTP_${statusCode}`);
+    this.name = "DataServerHttpError";
+  }
+}
+
+function parseDataServerRetryAfter(
+  value: string | string[] | undefined
+): number | undefined {
+  if (value === undefined) return undefined;
+
+  const header = Array.isArray(value) ? value[0] : value;
+  if (!header?.trim()) return undefined;
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(Math.ceil(seconds * 1000), MAX_RETRY_AFTER_MS);
+  }
+
+  const timestamp = Date.parse(header);
+  if (!Number.isFinite(timestamp)) return undefined;
+
+  return Math.min(
+    Math.max(0, timestamp - Date.now()),
+    MAX_RETRY_AFTER_MS
+  );
+}
+
+function dataServerBackoffMs(attempt: number): number {
+  return (
+    Math.min(BASE_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS) +
+    Math.floor(Math.random() * (MAX_JITTER_MS + 1))
+  );
+}
+
+function isRetryableDataServerError(error: unknown): boolean {
+  if (error instanceof DataServerHttpError) {
+    return RETRYABLE_HTTP_STATUSES.has(error.statusCode);
+  }
+
+  if (!(error instanceof Error)) return false;
+  if (error.message === "NEAR_DATA_SERVER_TIMEOUT") return true;
+
+  const code = (error as NodeJS.ErrnoException).code;
+  return typeof code === "string" && RETRYABLE_NETWORK_CODES.has(code);
+}
+
+function sleepDataServer(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function getHttpsOnce(
   url: URL,
   redirectsRemaining = MAX_REDIRECTS
 ): Promise<string> {
@@ -141,7 +212,10 @@ async function getHttps(
             if (status < 200 || status >= 300) {
               response.resume();
               reject(
-                new Error(`NEAR_DATA_SERVER_HTTP_${status}`)
+                new DataServerHttpError(
+                  status,
+                  parseDataServerRetryAfter(response.headers["retry-after"])
+                )
               );
               return;
             }
@@ -207,6 +281,37 @@ async function getHttps(
       ) {
         throw error;
       }
+    }
+  }
+
+  throw lastError ?? new Error("NEAR_DATA_SERVER_UNAVAILABLE");
+}
+
+async function getHttps(
+  url: URL,
+  redirectsRemaining = MAX_REDIRECTS
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return await getHttpsOnce(url, redirectsRemaining);
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !isRetryableDataServerError(error) ||
+        attempt === MAX_ATTEMPTS - 1
+      ) {
+        throw error;
+      }
+
+      const retryAfter =
+        error instanceof DataServerHttpError
+          ? error.retryAfterMs
+          : undefined;
+
+      await sleepDataServer(retryAfter ?? dataServerBackoffMs(attempt));
     }
   }
 

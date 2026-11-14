@@ -196,6 +196,31 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+function createConcurrencyLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  return async function limit<T>(
+    operation: () => Promise<T>
+  ): Promise<T> {
+    if (active >= concurrency) {
+      await new Promise<void>((resolve) => queue.push(resolve));
+    }
+
+    active++;
+
+    try {
+      return await operation();
+    } finally {
+      active--;
+      queue.shift()?.();
+    }
+  };
+}
+
+// Shared by all six projection categories.
+const limitProjectionRpc = createConcurrencyLimiter(2);
+
 async function fetchViews(
   rpcUrl: string,
   contractId: string,
@@ -207,12 +232,14 @@ async function fetchViews(
     ids,
     8,
     async (id): Promise<[string, unknown]> => {
-      const value = await callNearView<unknown>(
-        rpcUrl,
-        contractId,
-        methodName,
-        nearU64Args([id]),
-        block
+      const value = await limitProjectionRpc(() =>
+        callNearView<unknown>(
+          rpcUrl,
+          contractId,
+          methodName,
+          nearU64Args([id]),
+          block
+        )
       );
 
       return [id, value];
@@ -234,14 +261,7 @@ export async function fetchBlockProjectionViews(input: {
 }): Promise<BlockProjectionViews> {
   const { rpcUrl, contractId, block, plan } = input;
 
-  const [
-    mandates,
-    trades,
-    policySnapshots,
-    documentCommitments,
-    inspectionRecords,
-    settlements
-  ] = await Promise.all([
+  const settled = await Promise.allSettled([
     fetchViews(rpcUrl, contractId, "get_mandate", plan.mandateIds, block),
     fetchViews(rpcUrl, contractId, "get_trade", plan.tradeIds, block),
     fetchViews(
@@ -273,6 +293,28 @@ export async function fetchBlockProjectionViews(input: {
       block
     )
   ]);
+
+  // Do not let a failed category return control to the worker while sibling
+  // categories are still issuing RPC requests.
+  const failed = settled.find(
+    (result): result is PromiseRejectedResult =>
+      result.status === "rejected"
+  );
+
+  if (failed) {
+    throw failed.reason;
+  }
+
+  const [
+    mandates,
+    trades,
+    policySnapshots,
+    documentCommitments,
+    inspectionRecords,
+    settlements
+  ] = settled.map(
+    (result) => (result as PromiseFulfilledResult<Map<string, unknown>>).value
+  );
 
   return {
     mandates,

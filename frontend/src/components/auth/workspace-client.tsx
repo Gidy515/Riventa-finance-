@@ -17,6 +17,8 @@ import {
   verifyChallenge,
 } from "@/lib/auth-client";
 
+import { TradeLifecyclePanel } from "@/components/auth/trade-lifecycle-panel";
+
 import type {
   AuthSession,
   MandatePage,
@@ -76,6 +78,52 @@ function formatStatus(value: string): string {
   return value.replaceAll("_", " ");
 }
 
+const SDD_TOKEN_CONTRACT = "sdd.gidy515.testnet";
+const REQUIRED_FUNDING_AMOUNT = "10000000000";
+const CONTRACT_GAS = "50000000000000";
+const ACCEPT_GAS = "30000000000000";
+const FT_TRANSFER_GAS = "100000000000000";
+
+async function hashCommitment(value: string): Promise<number[]> {
+  const bytes = new TextEncoder().encode(value.trim());
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest));
+}
+
+function toNearU64(value: string): number {
+  const parsed = BigInt(value);
+
+  if (parsed < BigInt(0) || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(
+      "This trade ID cannot safely be submitted by this browser."
+    );
+  }
+
+  return Number(parsed);
+}
+
+function readNearReturnValue(outcome: unknown): string | null {
+  if (!outcome || typeof outcome !== "object") return null;
+
+  const status = (
+    outcome as {
+      status?: { SuccessValue?: string };
+    }
+  ).status;
+
+  if (typeof status?.SuccessValue !== "string") return null;
+
+  try {
+    const decoded = new TextDecoder().decode(
+      Uint8Array.from(window.atob(status.SuccessValue), (c) => c.charCodeAt(0))
+    );
+
+    return String(JSON.parse(decoded));
+  } catch {
+    return null;
+  }
+}
+
 export function WorkspaceClient() {
   const [view, setView] = useState<ViewState>("loading");
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -94,6 +142,15 @@ export function WorkspaceClient() {
   const [operationalDataError, setOperationalDataError] = useState<
     string | null
   >(null);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [transactionMessage, setTransactionMessage] = useState<string | null>(
+    null
+  );
+  const [supplierAccount, setSupplierAccount] = useState("");
+  const [resolverAccount, setResolverAccount] = useState("");
+  const [inspectionTerms, setInspectionTerms] = useState("");
+  const [refundTerms, setRefundTerms] = useState("");
+  const [agreementTerms, setAgreementTerms] = useState("");
 
   const connectorRef = useRef<NearConnector | null>(null);
   const walletRef = useRef<NearWalletBase | null>(null);
@@ -102,10 +159,7 @@ export function WorkspaceClient() {
   async function refreshOperationalData(status: WorkspaceStatus) {
     const infrastructure = status.infrastructure;
 
-    const infrastructureReady =
-      infrastructure.contract.accountId !== null &&
-      infrastructure.indexer.status === "indexed" &&
-      infrastructure.projections.status === "available";
+    const infrastructureReady = infrastructure.contract.accountId !== null;
 
     if (!infrastructureReady) {
       setTradePage(null);
@@ -214,12 +268,14 @@ export function WorkspaceClient() {
       const walletId = await connector.selectWallet({
         features: {
           signMessage: true,
+          signAndSendTransaction: true,
         },
       });
 
       const wallet = await connector.connect({ walletId });
 
       walletRef.current = wallet;
+      setWalletConnected(true);
 
       const availableAccounts = await wallet.getAccounts({
         network: "testnet",
@@ -241,6 +297,7 @@ export function WorkspaceClient() {
 
       connectorRef.current = null;
       walletRef.current = null;
+      setWalletConnected(false);
 
       setAccounts([]);
       setSelectedAccountId("");
@@ -321,6 +378,192 @@ export function WorkspaceClient() {
     }
   }
 
+  async function submitWalletCall(
+    receiverId: string,
+    methodName: string,
+    args: Record<string, unknown>,
+    gas: string,
+    deposit: string
+  ): Promise<unknown> {
+    if (!session) {
+      throw new Error("Your authenticated session is unavailable.");
+    }
+
+    const wallet = walletRef.current;
+
+    if (!wallet) {
+      throw new Error(
+        "Reconnect your NEAR wallet before submitting a transaction."
+      );
+    }
+
+    const availableAccounts = await wallet.getAccounts({
+      network: "testnet",
+    });
+
+    const matchingAccount = availableAccounts.find(
+      (account) => account.accountId === session.accountId
+    );
+
+    if (!matchingAccount) {
+      throw new Error(
+        "The connected wallet does not contain your authenticated account. Reconnect the correct wallet."
+      );
+    }
+
+    return wallet.signAndSendTransaction({
+      network: "testnet",
+      signerId: session.accountId,
+      receiverId,
+      actions: [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName,
+            args,
+            gas,
+            deposit,
+          },
+        },
+      ],
+    });
+  }
+
+  async function handleCreateTrade(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (busy) return;
+
+    setBusy(true);
+    setError(null);
+    setTransactionMessage(null);
+
+    try {
+      if (!workspaceStatus?.infrastructure.contract.accountId) {
+        throw new Error("The Riventa contract account is not configured.");
+      }
+
+      if (
+        !supplierAccount.trim() ||
+        !resolverAccount.trim() ||
+        !inspectionTerms.trim() ||
+        !refundTerms.trim() ||
+        !agreementTerms.trim()
+      ) {
+        throw new Error("Complete all trade proposal fields.");
+      }
+
+      const commitments = await Promise.all([
+        hashCommitment(inspectionTerms),
+        hashCommitment(refundTerms),
+        hashCommitment(agreementTerms),
+      ]);
+
+      const outcome = await submitWalletCall(
+        workspaceStatus.infrastructure.contract.accountId,
+        "create_trade",
+        {
+          supplier: supplierAccount.trim(),
+          proposed_resolver: resolverAccount.trim(),
+          inspection_criteria_commitment: commitments[0],
+          refund_terms_commitment: commitments[1],
+          agreement_commitment: commitments[2],
+        },
+        CONTRACT_GAS,
+        "0"
+      );
+
+      const tradeId = readNearReturnValue(outcome);
+
+      setTransactionMessage(
+        tradeId !== null
+          ? `Trade proposal submitted successfully. Trade ID: ${tradeId}.`
+          : "Trade proposal transaction completed. Refreshing indexed trade activity."
+      );
+
+      setSupplierAccount("");
+      setResolverAccount("");
+      setInspectionTerms("");
+      setRefundTerms("");
+      setAgreementTerms("");
+
+      await refreshWorkspaceStatus();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
+  async function handleAcceptTrade(tradeId: string) {
+    if (busy) return;
+
+    setBusy(true);
+    setError(null);
+    setTransactionMessage(null);
+
+    try {
+      const contractId = workspaceStatus?.infrastructure.contract.accountId;
+
+      if (!contractId) {
+        throw new Error("The Riventa contract account is not configured.");
+      }
+
+      await submitWalletCall(
+        contractId,
+        "accept_trade",
+        { trade_id: toNearU64(tradeId) },
+        ACCEPT_GAS,
+        "0"
+      );
+
+      setTransactionMessage(`Trade ${tradeId} accepted successfully.`);
+      await refreshWorkspaceStatus();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
+  async function handleFundTrade(tradeId: string) {
+    if (busy) return;
+
+    setBusy(true);
+    setError(null);
+    setTransactionMessage(null);
+
+    try {
+      const contractId = workspaceStatus?.infrastructure.contract.accountId;
+
+      if (!contractId) {
+        throw new Error("The Riventa contract account is not configured.");
+      }
+
+      await submitWalletCall(
+        SDD_TOKEN_CONTRACT,
+        "ft_transfer_call",
+        {
+          receiver_id: contractId,
+          amount: REQUIRED_FUNDING_AMOUNT,
+          msg: JSON.stringify({ trade_id: toNearU64(tradeId) }),
+        },
+        FT_TRANSFER_GAS,
+        "1"
+      );
+
+      setTransactionMessage(
+        `Funding transaction for trade ${tradeId} completed. The contract and indexer will determine its final recorded state.`
+      );
+
+      await refreshWorkspaceStatus();
+    } catch (caught) {
+      setError(describeError(caught));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
   async function handleLogout() {
     if (busy) return;
 
@@ -337,6 +580,7 @@ export function WorkspaceClient() {
 
         connectorRef.current = null;
         walletRef.current = null;
+        setWalletConnected(false);
       }
 
       if (!mountedRef.current) return;
@@ -350,6 +594,7 @@ export function WorkspaceClient() {
       setMandatePage(null);
       setOperationalDataError(null);
       setOperationalDataState("blocked");
+      setTransactionMessage(null);
       setView("signed-out");
     } catch (caught) {
       if (mountedRef.current) {
@@ -452,9 +697,9 @@ export function WorkspaceClient() {
             )}
 
             <p className="workspace-auth-note">
-              Connect your wallet, select the NEAR testnet account you want
-              to use, then sign a one-time authentication message. No
-              transaction is submitted.
+              Connect your wallet, select the NEAR testnet account you want to
+              use, then sign a one-time authentication message. No transaction
+              is submitted.
             </p>
 
             {error && (
@@ -490,6 +735,13 @@ export function WorkspaceClient() {
         <div className="workspace-account">
           <span className="workspace-status-dot" />
           <span>{session?.accountId}</span>
+          {!walletConnected ? (
+            <button type="button" onClick={handleConnectWallet} disabled={busy}>
+              Reconnect wallet
+            </button>
+          ) : (
+            <span className="workspace-wallet-connected">WALLET CONNECTED</span>
+          )}
           <button type="button" onClick={handleLogout} disabled={busy}>
             {busy ? "Signing out..." : "Sign out"}
           </button>
@@ -636,10 +888,159 @@ export function WorkspaceClient() {
                         : trade.buyerAccount}
                     </strong>
                   </div>
+
+                  {trade.state === "AwaitingAcceptance" &&
+                    trade.supplierAccount === session?.accountId && (
+                      <button
+                        className="workspace-secondary-button"
+                        type="button"
+                        onClick={() => handleAcceptTrade(trade.tradeId)}
+                        disabled={busy || !walletConnected}
+                      >
+                        {busy ? "Processing..." : "Accept trade"}
+                      </button>
+                    )}
+
+                  {trade.state === "Accepted" &&
+                    trade.buyerAccount === session?.accountId && (
+                      <button
+                        className="workspace-secondary-button"
+                        type="button"
+                        onClick={() => handleFundTrade(trade.tradeId)}
+                        disabled={busy || !walletConnected}
+                      >
+                        {busy ? "Processing..." : "Fund with 10,000 SDD"}
+                      </button>
+                    )}
                 </div>
               ))}
+
+              {tradePage.items.map((trade) => {
+                const contractId =
+                  workspaceStatus?.infrastructure.contract.accountId;
+
+                if (!contractId || !session) return null;
+
+                return (
+                  <TradeLifecyclePanel
+                    key={`lifecycle-${trade.tradeId}`}
+                    trade={trade}
+                    accountId={session.accountId}
+                    walletConnected={walletConnected}
+                    parentBusy={busy}
+                    onWalletCall={(methodName, args, gas, deposit) =>
+                      submitWalletCall(
+                        contractId,
+                        methodName,
+                        args,
+                        gas,
+                        deposit
+                      )
+                    }
+                    onTokenWalletCall={(methodName, args, gas, deposit) =>
+                      submitWalletCall(
+                        "sdd.gidy515.testnet",
+                        methodName,
+                        args,
+                        gas,
+                        deposit
+                      )
+                    }
+                  />
+                );
+              })}
             </>
           )}
+        </section>
+
+        <section className="workspace-empty-panel workspace-trade-panel">
+          <span className="workspace-empty-index">02A / CREATE TRADE</span>
+          <h2>Propose a trade</h2>
+          <p>
+            Create an immutable trade proposal. The three terms below are
+            SHA-256 hashed in your browser; only their 32-byte commitments are
+            submitted on-chain. Keep the original terms and documents off-chain.
+            The contract fixes the funding amount at 10,000 SDD.
+          </p>
+
+          <form className="workspace-trade-form" onSubmit={handleCreateTrade}>
+            <label>
+              SUPPLIER NEAR ACCOUNT
+              <input
+                value={supplierAccount}
+                onChange={(event) => setSupplierAccount(event.target.value)}
+                placeholder="supplier.testnet"
+                required
+                disabled={busy}
+              />
+            </label>
+
+            <label>
+              INDEPENDENT RESOLVER NEAR ACCOUNT
+              <input
+                value={resolverAccount}
+                onChange={(event) => setResolverAccount(event.target.value)}
+                placeholder="resolver.testnet"
+                required
+                disabled={busy}
+              />
+            </label>
+
+            <label>
+              INSPECTION CRITERIA
+              <textarea
+                value={inspectionTerms}
+                onChange={(event) => setInspectionTerms(event.target.value)}
+                placeholder="Describe the inspection requirements and pass/fail criteria."
+                required
+                disabled={busy}
+                rows={3}
+              />
+            </label>
+
+            <label>
+              REFUND TERMS
+              <textarea
+                value={refundTerms}
+                onChange={(event) => setRefundTerms(event.target.value)}
+                placeholder="Describe the agreed refund conditions."
+                required
+                disabled={busy}
+                rows={3}
+              />
+            </label>
+
+            <label>
+              TRADE AGREEMENT
+              <textarea
+                value={agreementTerms}
+                onChange={(event) => setAgreementTerms(event.target.value)}
+                placeholder="Enter the trade agreement or a canonical summary of its terms."
+                required
+                disabled={busy}
+                rows={4}
+              />
+            </label>
+
+            <button
+              className="workspace-primary-button"
+              type="submit"
+              disabled={
+                busy ||
+                !walletConnected ||
+                !workspaceStatus?.infrastructure.contract.accountId
+              }
+            >
+              {busy ? "Submitting..." : "Create trade proposal"}
+              {!busy && <span aria-hidden="true">↗</span>}
+            </button>
+
+            {!walletConnected && (
+              <p className="workspace-form-hint">
+                Reconnect the authenticated NEAR account to submit transactions.
+              </p>
+            )}
+          </form>
         </section>
 
         <section className="workspace-empty-panel workspace-trade-panel">
@@ -717,6 +1118,12 @@ export function WorkspaceClient() {
             </div>
           </div>
         </section>
+
+        {transactionMessage && (
+          <p className="workspace-transaction-message" role="status">
+            {transactionMessage}
+          </p>
+        )}
 
         {error && (
           <p className="workspace-error" role="alert">
