@@ -96,7 +96,7 @@ export function TradeLifecyclePanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to load this trade's lifecycle."
+          : "Unable to load this trade's details."
       );
     } finally {
       setLoading(false);
@@ -119,7 +119,7 @@ export function TradeLifecyclePanel({
     try {
       await onWalletCall(methodName, args, gas, "0");
       setMessage(
-        "Transaction submitted. Refresh the lifecycle to see its indexed on-chain result."
+        "Your request was submitted. Refresh the trade to check its latest status."
       );
       await refreshLifecycle();
       return true;
@@ -127,7 +127,7 @@ export function TradeLifecyclePanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "The transaction could not be submitted."
+          : "Your request could not be completed."
       );
       return false;
     } finally {
@@ -152,7 +152,7 @@ export function TradeLifecyclePanel({
       );
 
       setMessage(
-        "Supplier storage-registration transaction submitted. Verify its on-chain storage balance before retrying payout."
+        "The supplier payment account setup was submitted. Refresh the trade before retrying payment."
       );
     } catch (caught) {
       setError(
@@ -270,8 +270,8 @@ export function TradeLifecyclePanel({
 
   return (
     <section className="workspace-empty-panel workspace-trade-panel">
-      <span className="workspace-empty-index">TRADE LIFECYCLE</span>
-      <h3>Documents, inspection and settlement</h3>
+      <span className="workspace-empty-index">TRADE PROGRESS</span>
+      <h3>Documents, inspection and payment</h3>
 
       <button
         className="workspace-secondary-button"
@@ -279,7 +279,7 @@ export function TradeLifecyclePanel({
         onClick={() => void refreshLifecycle()}
         disabled={loading || busy}
       >
-        {loading ? "Refreshing lifecycle..." : "Refresh lifecycle"}
+        {loading ? "Refreshing trade..." : "Refresh trade"}
       </button>
 
       {error && (
@@ -293,13 +293,13 @@ export function TradeLifecyclePanel({
         </p>
       )}
 
-      {loading && !lifecycle && <p>Loading lifecycle records...</p>}
+      {loading && !lifecycle && <p>Loading trade details...</p>}
 
       {lifecycle && (
         <>
           <div className="workspace-session-details">
             <div>
-              <span>DOCUMENT COMMITMENTS</span>
+              <span>DOCUMENTS SUBMITTED</span>
               <strong>{lifecycle.documents.length}</strong>
             </div>
             <div>
@@ -314,7 +314,7 @@ export function TradeLifecyclePanel({
 
           <h4>Supplier documents</h4>
           {lifecycle.documents.length === 0 ? (
-            <p>No document commitments have been recorded.</p>
+            <p>No documents have been submitted yet.</p>
           ) : (
             lifecycle.documents.map((document) => (
               <div
@@ -334,7 +334,7 @@ export function TradeLifecyclePanel({
                   <strong>{document.submittedBy}</strong>
                 </div>
                 <div>
-                  <span>SHA-256 COMMITMENT</span>
+                  <span>DOCUMENT FINGERPRINT</span>
                   <strong>{document.commitment}</strong>
                 </div>
               </div>
@@ -343,14 +343,12 @@ export function TradeLifecyclePanel({
 
           {canSubmitDocuments && (
             <div className="workspace-trade-form">
-              <h4>Submit a document commitment</h4>
+              <h4>Submit a document</h4>
               <p>
-                The browser hashes the selected file and submits only its
-                SHA-256 commitment. The file itself is not uploaded or stored by
-                this action. Retain the original document securely.
+                A secure digital fingerprint of the selected file is recorded with the trade. The file itself is not uploaded or stored by this action. Keep the original document securely.
               </p>
               <label>
-                DOCUMENT TYPE
+                DOCUMENT CATEGORY
                 <select
                   value={documentType}
                   onChange={(event) =>
@@ -366,7 +364,7 @@ export function TradeLifecyclePanel({
                 </select>
               </label>
               <label>
-                DOCUMENT FILE
+                SELECT DOCUMENT
                 <input
                   type="file"
                   onChange={(event) =>
@@ -383,20 +381,20 @@ export function TradeLifecyclePanel({
                   !walletConnected || busy || parentBusy || !documentFile
                 }
               >
-                Submit document commitment
+                Submit document
               </button>
             </div>
           )}
 
           {canAssignInspector && (
             <div className="workspace-trade-form">
-              <h4>Assign independent inspector</h4>
+              <h4>Appoint independent inspector</h4>
               <p>
                 The inspector must already be registered and active in the
                 contract.
               </p>
               <label>
-                INSPECTOR NEAR ACCOUNT
+                INSPECTOR ACCOUNT
                 <input
                   value={inspectorAccount}
                   onChange={(event) => setInspectorAccount(event.target.value)}
@@ -432,7 +430,7 @@ export function TradeLifecyclePanel({
                 One replacement is permitted before an attestation is submitted.
               </p>
               <label>
-                REPLACEMENT NEAR ACCOUNT
+                REPLACEMENT INSPECTOR ACCOUNT
                 <input
                   value={replacementAccount}
                   onChange={(event) =>
@@ -465,9 +463,9 @@ export function TradeLifecyclePanel({
 
           {canAttest && (
             <div className="workspace-trade-form">
-              <h4>Submit inspection attestation</h4>
+              <h4>Submit inspection result</h4>
               <label>
-                INSPECTION OUTCOME
+                INSPECTION RESULT
                 <select
                   value={inspectionOutcome}
                   onChange={(event) =>
@@ -480,20 +478,19 @@ export function TradeLifecyclePanel({
                 </select>
               </label>
               <label>
-                EVIDENCE REPORT OR REFERENCE
+                INSPECTION REPORT OR EVIDENCE
                 <textarea
                   value={inspectionEvidence}
                   onChange={(event) =>
                     setInspectionEvidence(event.target.value)
                   }
                   rows={4}
-                  placeholder="Enter the inspection report or a stable reference to the off-chain evidence."
+                  placeholder="Describe the inspection result or provide a reference to the supporting evidence."
                   disabled={busy || parentBusy}
                 />
               </label>
               <p>
-                Only the SHA-256 commitment is submitted on-chain. Keep the
-                underlying evidence available to the authorized parties.
+                A secure fingerprint of the inspection evidence is recorded with the trade. Keep the original evidence available to the authorized parties.
               </p>
               <button
                 className="workspace-secondary-button"
@@ -506,7 +503,7 @@ export function TradeLifecyclePanel({
                   !inspectionEvidence.trim()
                 }
               >
-                Submit final attestation
+                Submit inspection result
               </button>
             </div>
           )}
@@ -518,13 +515,13 @@ export function TradeLifecyclePanel({
                 <strong>{inspection.replacementCount} / 1</strong>
               </div>
               <div>
-                <span>ATTESTING INSPECTOR</span>
+                <span>INSPECTION SUBMITTED BY</span>
                 <strong>
                   {inspection.attestingInspector ?? "Not submitted"}
                 </strong>
               </div>
               <div>
-                <span>EVIDENCE COMMITMENT</span>
+                <span>EVIDENCE FINGERPRINT</span>
                 <strong>
                   {inspection.evidenceCommitment ?? "Not submitted"}
                 </strong>
@@ -534,7 +531,7 @@ export function TradeLifecyclePanel({
 
           <h4>Settlement</h4>
           {lifecycle.settlements.length === 0 ? (
-            <p>No settlement authorization or transfer has been indexed.</p>
+            <p>No payment or refund has been recorded yet.</p>
           ) : (
             lifecycle.settlements.map((settlement) => (
               <div
@@ -550,25 +547,25 @@ export function TradeLifecyclePanel({
                   <strong>{display(settlement.status)}</strong>
                 </div>
                 <div>
-                  <span>AUTHORIZATION</span>
+                  <span>APPROVED BY</span>
                   <strong>{display(settlement.authorizationSource)}</strong>
                 </div>
                 <div>
-                  <span>SETTLEMENT ID</span>
-                  <strong>{settlement.settlementId ?? "Not initiated"}</strong>
+                  <span>PAYMENT REFERENCE</span>
+                  <strong>{settlement.settlementId ?? "Not started"}</strong>
                 </div>
                 <div>
                   <span>RECIPIENT</span>
                   <strong>
-                    {settlement.recipientAccount ?? "Not recorded"}
+                    {settlement.recipientAccount ?? "Not available"}
                   </strong>
                 </div>
                 <div>
-                  <span>AMOUNT (RAW)</span>
-                  <strong>{settlement.amountRaw ?? "Not recorded"}</strong>
+                  <span>AMOUNT (TOKEN BASE UNITS)</span>
+                  <strong>{settlement.amountRaw ?? "Not available"}</strong>
                 </div>
                 <div>
-                  <span>TRANSFER RESULT</span>
+                  <span>TRANSFER STATUS</span>
                   <strong>{display(settlement.transferResult)}</strong>
                 </div>
               </div>
@@ -579,7 +576,7 @@ export function TradeLifecyclePanel({
             <>
               <p className="workspace-form-hint">
                 Payout authorization required from{" "}
-                {releaseDelegated ? "mandate agent" : "buyer"}:{" "}
+                {releaseDelegated ? "authorized representative" : "buyer"}:{" "}
                 {releaseAuthority}
               </p>
               {canAuthorizeRelease && (
@@ -597,8 +594,8 @@ export function TradeLifecyclePanel({
                   disabled={!walletConnected || busy || parentBusy}
                 >
                   {releaseDelegated
-                    ? "Authorize mandated payout"
-                    : "Confirm supplier payout"}
+                    ? "Approve representative's payment"
+                    : "Approve supplier payment"}
                 </button>
               )}
             </>
@@ -608,7 +605,7 @@ export function TradeLifecyclePanel({
             <>
               <p className="workspace-form-hint">
                 Refund authorization required from{" "}
-                {refundDelegated ? "mandate agent" : "buyer"}: {refundAuthority}
+                {refundDelegated ? "authorized representative" : "buyer"}: {refundAuthority}
               </p>
               {canAuthorizeRefund && (
                 <button
@@ -625,8 +622,8 @@ export function TradeLifecyclePanel({
                   disabled={!walletConnected || busy || parentBusy}
                 >
                   {refundDelegated
-                    ? "Authorize mandated refund"
-                    : "Authorize buyer refund"}
+                    ? "Approve representative's refund"
+                    : "Approve buyer refund"}
                 </button>
               )}
             </>
@@ -641,7 +638,7 @@ export function TradeLifecyclePanel({
                   onClick={() => void registerSupplierTokenStorage()}
                   disabled={!walletConnected || busy || parentBusy}
                 >
-                  Register supplier to receive SDD (0.00125 NEAR)
+                  Enable supplier to receive payment (network fee: 0.00125 NEAR)
                 </button>
               )}
               <button
@@ -656,7 +653,7 @@ export function TradeLifecyclePanel({
                 }
                 disabled={!walletConnected || busy || parentBusy}
               >
-                Trigger authorized payout
+                Complete approved payment
               </button>
             </>
           )}
@@ -674,14 +671,12 @@ export function TradeLifecyclePanel({
               }
               disabled={!walletConnected || busy || parentBusy}
             >
-              Trigger authorized refund
+              Complete approved refund
             </button>
           )}
 
           <p className="workspace-form-hint">
-            A successful wallet prompt confirms submission, not settlement.
-            NEP-141 transfers are asynchronous; use Refresh lifecycle to verify
-            the indexed settlement status and final trade state.
+            Approving the request submits the payment or refund; it does not confirm completion. Refresh this trade to check its final payment or refund status.
           </p>
         </>
       )}

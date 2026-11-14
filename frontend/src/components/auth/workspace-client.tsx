@@ -75,7 +75,16 @@ function describeError(error: unknown): string {
 }
 
 function formatStatus(value: string): string {
-  return value.replaceAll("_", " ");
+  const labels: Record<string, string> = {
+    deployment_unverified: "Deployment not verified",
+    not_deployed: "Not deployed",
+    not_started: "Not started",
+    waiting_for_indexer: "Waiting for trade updates",
+    indexed: "Trade updates available",
+    available: "Available",
+  };
+
+  return labels[value] ?? value.replaceAll("_", " ");
 }
 
 const SDD_TOKEN_CONTRACT = "sdd.gidy515.testnet";
@@ -478,7 +487,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       setTransactionMessage(
         tradeId !== null
           ? `Trade proposal submitted successfully. Trade ID: ${tradeId}.`
-          : "Trade proposal transaction completed. Refreshing indexed trade activity."
+          : "Trade proposal submitted. Refresh trade activity to check its status."
       );
 
       setSupplierAccount("");
@@ -553,7 +562,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       );
 
       setTransactionMessage(
-        `Funding transaction for trade ${tradeId} completed. The contract and indexer will determine its final recorded state.`
+        `Funding request for trade ${tradeId} submitted. Refresh trade activity to check its status.`
       );
 
       await refreshWorkspaceStatus();
@@ -643,7 +652,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <span className="workspace-method-icon">N</span>
               <div>
                 <strong>NEAR Wallet</strong>
-                <span>Testnet · Ed25519 full-access key</span>
+                <span>Secure wallet connection</span>
               </div>
             </div>
 
@@ -690,7 +699,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                   onClick={handleSignIn}
                   disabled={busy || !selectedAccountId}
                 >
-                  {busy ? "Signing in..." : "Continue with selected account"}
+                  {busy ? "Signing in..." : "Continue"}
                   {!busy && <span aria-hidden="true">↗</span>}
                 </button>
               </>
@@ -714,7 +723,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
           </section>
 
           <p className="workspace-auth-footer">
-            PRIVATE TRADE INFRASTRUCTURE · SECURED BY NEAR
+            PRIVATE TRADE OPERATIONS · SECURE ACCESS
           </p>
         </div>
       </main>
@@ -740,7 +749,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               Reconnect wallet
             </button>
           ) : (
-            <span className="workspace-wallet-connected">WALLET CONNECTED</span>
+            <span className="workspace-wallet-connected">ACCOUNT CONNECTED</span>
           )}
           <button type="button" onClick={handleLogout} disabled={busy}>
             {busy ? "Signing out..." : "Sign out"}
@@ -756,7 +765,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             <p className="workspace-eyebrow">OVERVIEW</p>
             <h1>Your trade workspace</h1>
             <p className="workspace-content-description">
-              Monitor your trade infrastructure and workspace readiness.
+              Manage your transactions, authorizations and trade activity.
             </p>
           </div>
 
@@ -767,7 +776,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             disabled={statusLoading}
           >
             <span aria-hidden="true">↻</span>
-            {statusLoading ? "Refreshing..." : "Refresh status"}
+            {statusLoading ? "Refreshing..." : "Refresh"}
           </button>
         </div>
 
@@ -780,49 +789,45 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         <section className="workspace-infrastructure">
           <div className="workspace-section-heading">
             <div>
-              <p className="workspace-empty-index">01 / INFRASTRUCTURE</p>
-              <h2>System readiness</h2>
+              <p className="workspace-empty-index">01 / WORKSPACE</p>
+              <h2>Workspace availability</h2>
             </div>
             <span className="workspace-live-label">
-              {statusLoading ? "CHECKING" : "BACKEND STATUS"}
+              {statusLoading ? "CHECKING" : "SERVICE STATUS"}
             </span>
           </div>
 
           {!workspaceStatus ? (
             <div className="workspace-status-loading">
               {statusLoading
-                ? "Loading infrastructure status..."
-                : "Infrastructure status is unavailable. Refresh to retry."}
+                ? "Checking workspace availability..."
+                : "Workspace services are temporarily unavailable. Please refresh and try again."}
             </div>
           ) : (
             <div className="workspace-infrastructure-grid">
               <article className="workspace-infrastructure-card">
                 <div className="workspace-card-topline">
-                  <span className="workspace-card-label">SMART CONTRACT</span>
+                  <span className="workspace-card-label">TRADE SERVICES</span>
                   <span className="workspace-state state-pending">
                     {formatStatus(infrastructure!.contract.deploymentStatus)}
                   </span>
                 </div>
-                <h3>NEAR deployment</h3>
+                <h3>Trade service</h3>
                 <p>
-                  {infrastructure!.contract.accountId
-                    ? `Configured account: ${
-                        infrastructure!.contract.accountId
-                      }. Deployment has not yet been verified.`
-                    : "No contract account is configured. The trade contract has not been deployed."}
+                  {infrastructure!.contract.accountId ? "The trade service account is configured, but its deployment has not been verified." : "The trade service has not been deployed or configured yet."}
                 </p>
               </article>
 
               <article className="workspace-infrastructure-card">
                 <div className="workspace-card-topline">
-                  <span className="workspace-card-label">EVENT PIPELINE</span>
+                  <span className="workspace-card-label">TRADE UPDATES</span>
                   <span className="workspace-state state-pending">
                     {formatStatus(infrastructure!.indexer.status)}
                   </span>
                 </div>
-                <h3>Chain indexer</h3>
+                <h3>Trade activity updates</h3>
                 <p>
-                  On-chain events are not being indexed into the workspace yet.
+                  Trade activity updates are not available yet.
                 </p>
               </article>
 
@@ -833,10 +838,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                     {formatStatus(infrastructure!.projections.status)}
                   </span>
                 </div>
-                <h3>Data projections</h3>
+                <h3>Trade records</h3>
                 <p>
-                  Trade, mandate, inspection, and settlement projections are not
-                  populated yet.
+                  Trade records and related updates are not available yet. Please check back shortly.
                 </p>
               </article>
             </div>
@@ -845,32 +849,30 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
 
         <section className="workspace-activity-entry">
           <div>
-            <span className="workspace-empty-index">02 / TRADE OPERATIONS</span>
+            <span className="workspace-empty-index">02 / TRADE ACTIVITY</span>
             <h2>Trade activity</h2>
             <p>
-              Review trade records, accept proposals, fund trades, and manage
-              lifecycle actions.
+              Review trade records, respond to proposals, fund trades, and track each trade's progress.
             </p>
           </div>
           <a href="/workspace/activity" className="workspace-activity-link">
-            Open trade activity
+            View trade activity
             <span aria-hidden="true">↗</span>
           </a>
         </section>
 
         <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">02A / CREATE TRADE</span>
+          <span className="workspace-empty-index">03 / NEW TRADE</span>
           <h2>Propose a trade</h2>
           <p>
-            Create an immutable trade proposal. The three terms below are
-            SHA-256 hashed in your browser; only their 32-byte commitments are
-            submitted on-chain. Keep the original terms and documents off-chain.
-            The contract fixes the funding amount at 10,000 SDD.
+            Create a trade proposal by entering the supplier, independent reviewer
+            and agreed terms. The original agreement and supporting documents
+            remain private. The funding amount for this demo is 10,000 SDD.
           </p>
 
           <form className="workspace-trade-form" onSubmit={handleCreateTrade}>
             <label>
-              SUPPLIER NEAR ACCOUNT
+              SUPPLIER ACCOUNT
               <input
                 value={supplierAccount}
                 onChange={(event) => setSupplierAccount(event.target.value)}
@@ -881,7 +883,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             </label>
 
             <label>
-              INDEPENDENT RESOLVER NEAR ACCOUNT
+              INDEPENDENT REVIEWER ACCOUNT
               <input
                 value={resolverAccount}
                 onChange={(event) => setResolverAccount(event.target.value)}
@@ -942,25 +944,24 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
 
             {!walletConnected && (
               <p className="workspace-form-hint">
-                Reconnect the authenticated NEAR account to submit transactions.
+                Reconnect your account to continue.
               </p>
             )}
           </form>
         </section>
 
         <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">03 / AUTHORIZATION</span>
-          <h2>Agent mandates</h2>
+          <span className="workspace-empty-index">04 / AUTHORIZATIONS</span>
+          <h2>Agent authorizations</h2>
 
           {operationalDataState === "blocked" && (
             <p>
-              Mandate records will appear here when the contract and indexing
-              infrastructure are ready.
+              Your agent authorizations will appear here when they are available.
             </p>
           )}
 
           {operationalDataState === "loading" && (
-            <p>Loading your agent mandates...</p>
+            <p>Loading your authorizations...</p>
           )}
 
           {operationalDataState === "error" && (
@@ -973,8 +974,8 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             <>
               <p>
                 {mandatePage.items.length === 0
-                  ? "No mandates are associated with this account yet."
-                  : `${mandatePage.items.length} mandate records loaded.`}
+                  ? "No agent authorizations are associated with this account yet."
+                  : `${mandatePage.items.length} authorizations found.`}
               </p>
 
               {mandatePage.items.map((mandate) => (
@@ -983,11 +984,11 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                   key={mandate.mandateId}
                 >
                   <div>
-                    <span>MANDATE ID</span>
+                    <span>AUTHORIZATION ID</span>
                     <strong>{mandate.mandateId}</strong>
                   </div>
                   <div>
-                    <span>AGENT</span>
+                    <span>AUTHORIZED AGENT</span>
                     <strong>{mandate.agentAccount}</strong>
                   </div>
                   <div>
@@ -1001,20 +1002,20 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         </section>
 
         <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">04 / SESSION</span>
-          <h2>Authenticated account</h2>
+          <span className="workspace-empty-index">05 / ACCOUNT</span>
+          <h2>Your account</h2>
 
           <div className="workspace-session-details">
             <div>
-              <span>CONNECTED ACCOUNT</span>
+              <span>ACCOUNT</span>
               <strong>{session?.accountId}</strong>
             </div>
             <div>
-              <span>NETWORK</span>
+              <span>ENVIRONMENT</span>
               <strong>{session?.network}</strong>
             </div>
             <div>
-              <span>SESSION EXPIRES</span>
+              <span>SESSION EXPIRY</span>
               <strong>
                 {session?.expiresAt
                   ? new Date(session.expiresAt).toLocaleString()
@@ -1043,8 +1044,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             <p className="workspace-eyebrow">TRADE OPERATIONS</p>
             <h1>Trade activity</h1>
             <p className="workspace-content-description">
-              Review trade records, take required actions, and manage each
-              trade through its lifecycle.
+              Review trade records, take required actions, and manage each trade through to completion.
             </p>
           </div>
           <a className="workspace-back-link" href="/workspace">
@@ -1060,13 +1060,12 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         )}
 
         <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">02 / TRADE OPERATIONS</span>
+          <span className="workspace-empty-index">02 / TRADE ACTIVITY</span>
           <h2>Trade activity</h2>
 
           {operationalDataState === "blocked" && (
             <p>
-              Trade records will appear here after the contract is verified,
-              chain events are indexed, and workspace projections are populated.
+              Trade records will appear here once trade services are ready. Please check back shortly.
             </p>
           )}
 
@@ -1085,13 +1084,13 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <p>
                 {tradePage.items.length === 0
                   ? "No trades are associated with this account yet."
-                  : `${tradePage.items.length} trade records loaded.`}
+                  : `${tradePage.items.length} trades found.`}
               </p>
 
               {tradePage.items.map((trade) => (
                 <div className="workspace-session-details" key={trade.tradeId}>
                   <div>
-                    <span>TRADE ID</span>
+                    <span>TRADE REFERENCE</span>
                     <strong>{trade.tradeId}</strong>
                   </div>
                   <div>
@@ -1127,7 +1126,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                         onClick={() => handleFundTrade(trade.tradeId)}
                         disabled={busy || !walletConnected}
                       >
-                        {busy ? "Processing..." : "Fund with 10,000 SDD"}
+                        {busy ? "Processing..." : "Fund trade · 10,000 SDD"}
                       </button>
                     )}
                 </div>
