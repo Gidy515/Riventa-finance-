@@ -1,7 +1,18 @@
-import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
+import {
+  Pool,
+  type PoolClient,
+  type QueryResult,
+  type QueryResultRow,
+} from "pg";
 import { config } from "../config.js";
 
-export const database = new Pool(config.database);
+export const database = new Pool({
+  ...config.database,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: true }
+      : undefined,
+});
 
 database.on("error", (error: Error) => {
   console.error("Unexpected PostgreSQL pool error:", error);
