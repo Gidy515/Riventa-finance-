@@ -34,6 +34,7 @@ export const siteContent = {
     { label: "Agent limits", href: "#agent-limits" },
     { label: "Build status", href: "#build-status" },
     { label: "Developers", href: "#developers" },
+    { label: "Open workspace", href: "/workspace" },
   ],
   hero: {
     eyebrow: "TRADE OPERATIONS · NEAR",
