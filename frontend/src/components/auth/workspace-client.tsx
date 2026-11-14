@@ -808,9 +808,6 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <article className="workspace-infrastructure-card">
                 <div className="workspace-card-topline">
                   <span className="workspace-card-label">TRADE SERVICES</span>
-                  <span className="workspace-state state-pending">
-                    {formatStatus(infrastructure!.contract.deploymentStatus)}
-                  </span>
                 </div>
                 <h3>Trade service</h3>
                 <p>
@@ -821,9 +818,6 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <article className="workspace-infrastructure-card">
                 <div className="workspace-card-topline">
                   <span className="workspace-card-label">TRADE UPDATES</span>
-                  <span className="workspace-state state-pending">
-                    {formatStatus(infrastructure!.indexer.status)}
-                  </span>
                 </div>
                 <h3>Trade activity updates</h3>
                 <p>
@@ -834,9 +828,6 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <article className="workspace-infrastructure-card">
                 <div className="workspace-card-topline">
                   <span className="workspace-card-label">TRADE DATA</span>
-                  <span className="workspace-state state-pending">
-                    {formatStatus(infrastructure!.projections.status)}
-                  </span>
                 </div>
                 <h3>Trade records</h3>
                 <p>
