@@ -258,6 +258,50 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     }
   }
 
+  async function restoreWalletConnection(accountId: string) {
+    try {
+      const { NearConnector } = await import("@hot-labs/near-connect");
+      const connector = new NearConnector({
+        network: "testnet",
+        autoConnect: true,
+      });
+
+      connectorRef.current = connector;
+
+      const wallet = await connector.wallet();
+      const availableAccounts = await wallet.getAccounts({
+        network: "testnet",
+      });
+      const authenticatedAccount = availableAccounts.find(
+        (account) => account.accountId === accountId
+      );
+
+      if (!mountedRef.current) return;
+
+      if (!authenticatedAccount) {
+        walletRef.current = null;
+        setWalletConnected(false);
+        setAccounts([]);
+        setSelectedAccountId("");
+        return;
+      }
+
+      walletRef.current = wallet;
+      setAccounts(availableAccounts);
+      setSelectedAccountId(accountId);
+      setWalletConnected(true);
+    } catch {
+      // A missing or expired wallet connection must not invalidate the
+      // separate Riventa authentication session. Keep the reconnect action visible.
+      if (!mountedRef.current) return;
+
+      walletRef.current = null;
+      setWalletConnected(false);
+      setAccounts([]);
+      setSelectedAccountId("");
+    }
+  }
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -269,6 +313,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         setView("signed-in");
 
         void refreshWorkspaceStatus();
+        void restoreWalletConnection(result.session.accountId);
       })
       .catch(() => {
         if (!mountedRef.current) return;
