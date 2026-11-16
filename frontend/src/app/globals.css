@@ -3874,8 +3874,8 @@ main > section.section:nth-of-type(even) {
   border-color: var(--rule);
   border-radius: 7px;
   background: #fff;
-  color: var(--teal);
-  -webkit-text-fill-color: var(--teal);
+  color: #111827;
+  -webkit-text-fill-color: #111827;
   font-size: 13px;
   font-weight: 500;
   box-shadow: inset 0 1px 2px rgb(23 43 58 / 3%);
