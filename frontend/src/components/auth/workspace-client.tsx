@@ -140,7 +140,10 @@ function formatStatus(value: string): string {
     available: "Available",
   };
 
-  return labels[value] ?? value.replaceAll("_", " ");
+  return (
+    labels[value] ??
+    value.replaceAll("_", " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+  );
 }
 
 const SDD_TOKEN_CONTRACT = "sdd.gidy515.testnet";
@@ -188,7 +191,11 @@ function readNearReturnValue(outcome: unknown): string | null {
   }
 }
 
-export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "activity" }) {
+export function WorkspaceClient({
+  page = "overview",
+}: {
+  page?: "overview" | "activity";
+}) {
   const [view, setView] = useState<ViewState>("loading");
   const [session, setSession] = useState<AuthSession | null>(null);
   const [workspaceStatus, setWorkspaceStatus] =
@@ -676,9 +683,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         throw new Error("The Riventa contract account is not configured.");
       }
 
-      const trade = tradePage?.items.find(
-        (item) => item.tradeId === tradeId
-      );
+      const trade = tradePage?.items.find((item) => item.tradeId === tradeId);
 
       if (!trade) {
         throw new Error(
@@ -693,7 +698,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       const fundingAmount = BigInt(trade.amountRaw);
 
       if (fundingAmount <= BigInt(0) || fundingAmount > U128_MAX) {
-        throw new Error("The recorded trade amount is outside the supported range.");
+        throw new Error(
+          "The recorded trade amount is outside the supported range."
+        );
       }
 
       await submitWalletCall(
@@ -885,7 +892,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     <main className="workspace-screen">
       {transactionMessage && (
         <div className="workspace-toast" role="status" aria-live="polite">
-          <span className="workspace-toast-icon" aria-hidden="true">✓</span>
+          <span className="workspace-toast-icon" aria-hidden="true">
+            ✓
+          </span>
           <span>{transactionMessage}</span>
           <button
             type="button"
@@ -912,7 +921,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               Reconnect wallet
             </button>
           ) : (
-            <span className="workspace-wallet-connected">ACCOUNT CONNECTED</span>
+            <span className="workspace-wallet-connected">
+              ACCOUNT CONNECTED
+            </span>
           )}
           <button type="button" onClick={handleLogout} disabled={busy}>
             {busy ? "Signing out..." : "Sign out"}
@@ -923,490 +934,540 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       <section className="workspace-content">
         {page === "overview" ? (
           <>
-        <div className="workspace-heading-row">
-          <div>
-            <p className="workspace-eyebrow">OVERVIEW</p>
-            <h1>Your trade workspace</h1>
-            <p className="workspace-content-description">
-              Manage your transactions, authorizations and trade activity.
-            </p>
-          </div>
-
-          <button
-            className="workspace-refresh-button"
-            type="button"
-            onClick={refreshWorkspaceStatus}
-            disabled={statusLoading}
-          >
-            <span aria-hidden="true">↻</span>
-            {statusLoading ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-
-        {statusError && (
-          <p className="workspace-error" role="alert">
-            {statusError}
-          </p>
-        )}
-
-        <section className="workspace-infrastructure">
-          <div className="workspace-section-heading">
-            <div>
-              <p className="workspace-empty-index">01 / WORKSPACE</p>
-              <h2>Workspace availability</h2>
-            </div>
-            <span className="workspace-live-label">
-              {statusLoading ? "CHECKING" : "SERVICE STATUS"}
-            </span>
-          </div>
-
-          {!workspaceStatus ? (
-            <div className="workspace-status-loading">
-              {statusLoading
-                ? "Checking workspace availability..."
-                : "Workspace services are temporarily unavailable. Please refresh and try again."}
-            </div>
-          ) : (
-            <div className="workspace-infrastructure-grid">
-              <article className="workspace-infrastructure-card">
-                <div className="workspace-card-topline">
-                  <span className="workspace-card-label">TRADE SERVICES</span>
-                </div>
-                <h3>Trade service</h3>
-                <p>
-                  {infrastructure!.contract.accountId ? "The trade service account is configured, but its deployment has not been verified." : "The trade service has not been deployed or configured yet."}
+            <div className="workspace-heading-row">
+              <div>
+                <p className="workspace-eyebrow">OVERVIEW</p>
+                <h1>Your trade workspace</h1>
+                <p className="workspace-content-description">
+                  Manage your transactions, authorizations and trade activity.
                 </p>
-              </article>
+              </div>
 
-              <article className="workspace-infrastructure-card">
-                <div className="workspace-card-topline">
-                  <span className="workspace-card-label">TRADE UPDATES</span>
-                </div>
-                <h3>Trade activity updates</h3>
-                <p>
-                  Trade activity updates are not available yet.
-                </p>
-              </article>
-
-              <article className="workspace-infrastructure-card">
-                <div className="workspace-card-topline">
-                  <span className="workspace-card-label">TRADE DATA</span>
-                </div>
-                <h3>Trade records</h3>
-                <p>
-                  Trade records and related updates are not available yet. Please check back shortly.
-                </p>
-              </article>
+              <button
+                className="workspace-refresh-button"
+                type="button"
+                onClick={refreshWorkspaceStatus}
+                disabled={statusLoading}
+              >
+                <span aria-hidden="true">↻</span>
+                {statusLoading ? "Refreshing..." : "Refresh"}
+              </button>
             </div>
-          )}
-        </section>
 
-        <section className="workspace-activity-entry">
-          <div>
-            <span className="workspace-empty-index">02 / TRADE ACTIVITY</span>
-            <h2>Trade activity</h2>
-            <p>
-              Review trade records, respond to proposals, fund trades, and track each trade's progress.
-            </p>
-          </div>
-          <a href="/workspace/activity" className="workspace-activity-link">
-            View trade activity
-            <span aria-hidden="true">↗</span>
-          </a>
-        </section>
-
-        <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">03 / NEW TRADE</span>
-          <h2>Propose a trade</h2>
-          <p>
-            Create a trade proposal by entering the supplier, independent reviewer
-            and agreed terms. The original agreement and supporting documents
-            remain private. Set the agreed funding amount below. Amounts are
-            displayed as USDC, with up to 6 decimal places.
-          </p>
-
-          <form className="workspace-trade-form" onSubmit={handleCreateTrade}>
-            <label>
-              TRADE AMOUNT (USDC)
-              <input
-                type="text"
-                inputMode="decimal"
-                value={tradeAmount}
-                onChange={(event) => setTradeAmount(event.target.value)}
-                placeholder="10000.00"
-                required
-                disabled={busy}
-              />
-            </label>
-
-            <label>
-              SUPPLIER ACCOUNT
-              <input
-                value={supplierAccount}
-                onChange={(event) => setSupplierAccount(event.target.value)}
-                placeholder="supplier.testnet"
-                required
-                disabled={busy}
-              />
-            </label>
-
-            <label>
-              INDEPENDENT REVIEWER ACCOUNT
-              <input
-                value={resolverAccount}
-                onChange={(event) => setResolverAccount(event.target.value)}
-                placeholder="resolver.testnet"
-                required
-                disabled={busy}
-              />
-            </label>
-
-            <label>
-              INSPECTION CRITERIA
-              <textarea
-                value={inspectionTerms}
-                onChange={(event) => setInspectionTerms(event.target.value)}
-                placeholder="Describe the inspection requirements and pass/fail criteria."
-                required
-                disabled={busy}
-                rows={3}
-              />
-            </label>
-
-            <label>
-              REFUND TERMS
-              <textarea
-                value={refundTerms}
-                onChange={(event) => setRefundTerms(event.target.value)}
-                placeholder="Describe the agreed refund conditions."
-                required
-                disabled={busy}
-                rows={3}
-              />
-            </label>
-
-            <label>
-              TRADE AGREEMENT
-              <textarea
-                value={agreementTerms}
-                onChange={(event) => setAgreementTerms(event.target.value)}
-                placeholder="Enter the trade agreement or a canonical summary of its terms."
-                required
-                disabled={busy}
-                rows={4}
-              />
-            </label>
-
-            <button
-              className="workspace-primary-button"
-              type="submit"
-              disabled={
-                busy ||
-                !walletConnected ||
-                !workspaceStatus?.infrastructure.contract.accountId
-              }
-            >
-              {busy ? "Submitting..." : "Create trade proposal"}
-              {!busy && <span aria-hidden="true">↗</span>}
-            </button>
-
-            {!walletConnected && (
-              <p className="workspace-form-hint">
-                Reconnect your account to continue.
+            {statusError && (
+              <p className="workspace-error" role="alert">
+                {statusError}
               </p>
             )}
-          </form>
-        </section>
 
-        <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">04 / AUTHORIZATIONS</span>
-          <h2>Agent authorizations</h2>
+            <section className="workspace-infrastructure">
+              <div className="workspace-section-heading">
+                <div>
+                  <p className="workspace-empty-index">01 / WORKSPACE</p>
+                  <h2>Workspace availability</h2>
+                </div>
+                <span className="workspace-live-label">
+                  {statusLoading ? "CHECKING" : "SERVICE STATUS"}
+                </span>
+              </div>
 
-          {operationalDataState === "blocked" && (
-            <p>
-              Your agent authorizations will appear here when they are available.
-            </p>
-          )}
+              {!workspaceStatus ? (
+                <div className="workspace-status-loading">
+                  {statusLoading
+                    ? "Checking workspace availability..."
+                    : "Workspace services are temporarily unavailable. Please refresh and try again."}
+                </div>
+              ) : (
+                <div className="workspace-infrastructure-grid">
+                  <article className="workspace-infrastructure-card">
+                    <div className="workspace-card-topline">
+                      <span className="workspace-card-label">
+                        TRADE SERVICES
+                      </span>
+                    </div>
+                    <h3>Trade service</h3>
+                    <p>
+                      {infrastructure!.contract.accountId
+                        ? "The trade service account is configured, but its deployment has not been verified."
+                        : "The trade service has not been deployed or configured yet."}
+                    </p>
+                  </article>
 
-          {operationalDataState === "loading" && (
-            <p>Loading your authorizations...</p>
-          )}
+                  <article className="workspace-infrastructure-card">
+                    <div className="workspace-card-topline">
+                      <span className="workspace-card-label">
+                        TRADE UPDATES
+                      </span>
+                    </div>
+                    <h3>Trade activity updates</h3>
+                    <p>Trade activity updates are not available yet.</p>
+                  </article>
 
-          {operationalDataState === "error" && (
-            <p className="workspace-error" role="alert">
-              {operationalDataError}
-            </p>
-          )}
+                  <article className="workspace-infrastructure-card">
+                    <div className="workspace-card-topline">
+                      <span className="workspace-card-label">TRADE DATA</span>
+                    </div>
+                    <h3>Trade records</h3>
+                    <p>
+                      Trade records and related updates are not available yet.
+                      Please check back shortly.
+                    </p>
+                  </article>
+                </div>
+              )}
+            </section>
 
-          {operationalDataState === "ready" && mandatePage && (
-            <>
+            <section className="workspace-activity-entry">
+              <div>
+                <span className="workspace-empty-index">
+                  02 / TRADE ACTIVITY
+                </span>
+                <h2>Trade activity</h2>
+                <p>
+                  Review trade records, respond to proposals, fund trades, and
+                  track each trade's progress.
+                </p>
+              </div>
+              <a href="/workspace/activity" className="workspace-activity-link">
+                View trade activity
+                <span aria-hidden="true">↗</span>
+              </a>
+            </section>
+
+            <section className="workspace-empty-panel workspace-trade-panel">
+              <span className="workspace-empty-index">03 / NEW TRADE</span>
+              <h2>Propose a trade</h2>
               <p>
-                {mandatePage.items.length === 0
-                  ? "No agent authorizations are associated with this account yet."
-                  : `${mandatePage.items.length} authorizations found.`}
+                Create a trade proposal by entering the supplier, independent
+                reviewer and agreed terms. The original agreement and supporting
+                documents remain private. Set the agreed funding amount below.
+                Amounts are displayed as USDC, with up to 6 decimal places.
               </p>
 
-              {mandatePage.items.map((mandate) => (
-                <div
-                  className="workspace-session-details"
-                  key={mandate.mandateId}
+              <form
+                className="workspace-trade-form"
+                onSubmit={handleCreateTrade}
+              >
+                <label>
+                  TRADE AMOUNT (USDC)
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={tradeAmount}
+                    onChange={(event) => setTradeAmount(event.target.value)}
+                    placeholder="10000.00"
+                    required
+                    disabled={busy}
+                  />
+                </label>
+
+                <label>
+                  SUPPLIER ACCOUNT
+                  <input
+                    value={supplierAccount}
+                    onChange={(event) => setSupplierAccount(event.target.value)}
+                    placeholder="supplier.testnet"
+                    required
+                    disabled={busy}
+                  />
+                </label>
+
+                <label>
+                  INDEPENDENT REVIEWER ACCOUNT
+                  <input
+                    value={resolverAccount}
+                    onChange={(event) => setResolverAccount(event.target.value)}
+                    placeholder="resolver.testnet"
+                    required
+                    disabled={busy}
+                  />
+                </label>
+
+                <label>
+                  INSPECTION CRITERIA
+                  <textarea
+                    value={inspectionTerms}
+                    onChange={(event) => setInspectionTerms(event.target.value)}
+                    placeholder="Describe the inspection requirements and pass/fail criteria."
+                    required
+                    disabled={busy}
+                    rows={3}
+                  />
+                </label>
+
+                <label>
+                  REFUND TERMS
+                  <textarea
+                    value={refundTerms}
+                    onChange={(event) => setRefundTerms(event.target.value)}
+                    placeholder="Describe the agreed refund conditions."
+                    required
+                    disabled={busy}
+                    rows={3}
+                  />
+                </label>
+
+                <label>
+                  TRADE AGREEMENT
+                  <textarea
+                    value={agreementTerms}
+                    onChange={(event) => setAgreementTerms(event.target.value)}
+                    placeholder="Enter the trade agreement or a canonical summary of its terms."
+                    required
+                    disabled={busy}
+                    rows={4}
+                  />
+                </label>
+
+                <button
+                  className="workspace-primary-button"
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !walletConnected ||
+                    !workspaceStatus?.infrastructure.contract.accountId
+                  }
                 >
-                  <div>
-                    <span>AUTHORIZATION ID</span>
-                    <strong>{mandate.mandateId}</strong>
-                  </div>
-                  <div>
-                    <span>AUTHORIZED AGENT</span>
-                    <strong>{mandate.agentAccount}</strong>
-                  </div>
-                  <div>
-                    <span>STATUS</span>
-                    <strong>{mandate.revoked ? "Revoked" : "Active"}</strong>
-                  </div>
+                  {busy ? "Submitting..." : "Create trade proposal"}
+                  {!busy && <span aria-hidden="true">↗</span>}
+                </button>
+
+                {!walletConnected && (
+                  <p className="workspace-form-hint">
+                    Reconnect your account to continue.
+                  </p>
+                )}
+              </form>
+            </section>
+
+            <section className="workspace-empty-panel workspace-trade-panel">
+              <span className="workspace-empty-index">04 / AUTHORIZATIONS</span>
+              <h2>Agent authorizations</h2>
+
+              {operationalDataState === "blocked" && (
+                <p>
+                  Your agent authorizations will appear here when they are
+                  available.
+                </p>
+              )}
+
+              {operationalDataState === "loading" && (
+                <p>Loading your authorizations...</p>
+              )}
+
+              {operationalDataState === "error" && (
+                <p className="workspace-error" role="alert">
+                  {operationalDataError}
+                </p>
+              )}
+
+              {operationalDataState === "ready" && mandatePage && (
+                <>
+                  <p>
+                    {mandatePage.items.length === 0
+                      ? "No agent authorizations are associated with this account yet."
+                      : `${mandatePage.items.length} authorizations found.`}
+                  </p>
+
+                  {mandatePage.items.map((mandate) => (
+                    <div
+                      className="workspace-session-details"
+                      key={mandate.mandateId}
+                    >
+                      <div>
+                        <span>AUTHORIZATION ID</span>
+                        <strong>{mandate.mandateId}</strong>
+                      </div>
+                      <div>
+                        <span>AUTHORIZED AGENT</span>
+                        <strong>{mandate.agentAccount}</strong>
+                      </div>
+                      <div>
+                        <span>STATUS</span>
+                        <strong>
+                          {mandate.revoked ? "Revoked" : "Active"}
+                        </strong>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </section>
+
+            <section className="workspace-empty-panel workspace-trade-panel">
+              <span className="workspace-empty-index">05 / ACCOUNT</span>
+              <h2>Your account</h2>
+
+              <div className="workspace-session-details">
+                <div>
+                  <span>ACCOUNT</span>
+                  <strong>{session?.accountId}</strong>
                 </div>
-              ))}
-            </>
-          )}
-        </section>
+                <div>
+                  <span>SESSION EXPIRY</span>
+                  <strong>
+                    {session?.expiresAt
+                      ? new Date(session.expiresAt).toLocaleString()
+                      : "—"}
+                  </strong>
+                </div>
+              </div>
+            </section>
 
-        <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">05 / ACCOUNT</span>
-          <h2>Your account</h2>
-
-          <div className="workspace-session-details">
-            <div>
-              <span>ACCOUNT</span>
-              <strong>{session?.accountId}</strong>
-            </div>
-            <div>
-              <span>SESSION EXPIRY</span>
-              <strong>
-                {session?.expiresAt
-                  ? new Date(session.expiresAt).toLocaleString()
-                  : "—"}
-              </strong>
-            </div>
-          </div>
-        </section>
-
-        {error && (
-          <p className="workspace-error" role="alert">
-            {error}
-          </p>
-        )}
+            {error && (
+              <p className="workspace-error" role="alert">
+                {error}
+              </p>
+            )}
           </>
         ) : (
           <>
-        <div className="workspace-heading-row">
-          <div>
-            <p className="workspace-eyebrow">TRADE OPERATIONS</p>
-            <h1>Trade activity</h1>
-            <p className="workspace-content-description">
-              Review trade records, take required actions, and manage each trade through to completion.
-            </p>
-          </div>
-          <a className="workspace-back-link" href="/workspace">
-            <span aria-hidden="true">←</span>
-            Back to overview
-          </a>
-        </div>
-
-        {statusError && (
-          <p className="workspace-error" role="alert">
-            {statusError}
-          </p>
-        )}
-
-        <section className="workspace-empty-panel workspace-trade-panel">
-          <span className="workspace-empty-index">02 / TRADE ACTIVITY</span>
-          <h2>Trade activity</h2>
-
-          {operationalDataState === "blocked" && (
-            <p>
-              Trade records will appear here once trade services are ready. Please check back shortly.
-            </p>
-          )}
-
-          {operationalDataState === "loading" && (
-            <p>Loading your trade activity...</p>
-          )}
-
-          {operationalDataState === "error" && (
-            <p className="workspace-error" role="alert">
-              {operationalDataError}
-            </p>
-          )}
-
-          {operationalDataState === "ready" && tradePage && (
-            <>
-              <p>
-                {tradePage.items.length === 0
-                  ? "No trades are associated with this account yet."
-                  : `${tradePage.items.length} trades found.`}
-              </p>
-
-              <div className="workspace-trade-grid">
-                {tradePage.items.map((trade) => {
-                  const counterparty =
-                    trade.buyerAccount === session?.accountId
-                      ? trade.supplierAccount
-                      : trade.buyerAccount;
-                  const isSelected = selectedTradeId === trade.tradeId;
-
-                  return (
-                    <button
-                      className={`workspace-trade-card${isSelected ? " is-selected" : ""}`}
-                      key={trade.tradeId}
-                      type="button"
-                      onClick={() => setSelectedTradeId(isSelected ? null : trade.tradeId)}
-                      aria-expanded={isSelected}
-                      aria-controls={isSelected ? "workspace-selected-trade" : undefined}
-                    >
-                      <span className="workspace-trade-card-topline">
-                        <span>TRADE #{trade.tradeId}</span>
-                        <span className="workspace-trade-card-arrow" aria-hidden="true">
-                          {isSelected ? "−" : "↗"}
-                        </span>
-                      </span>
-                      <strong className="workspace-trade-card-status">
-                        {formatStatus(trade.state)}
-                      </strong>
-                      <span className="workspace-trade-card-counterparty">
-                        With {counterparty}
-                      </span>
-                      <span className="workspace-trade-card-meta">
-                        <span>{formatRawUsdcAmount(trade.amountRaw)} USDC</span>
-                        <span>{formatTradeDate(trade.createdAtNs)}</span>
-                      </span>
-                    </button>
-                  );
-                })}
+            <div className="workspace-heading-row">
+              <div>
+                <p className="workspace-eyebrow">TRADE OPERATIONS</p>
+                <h1>Trade activity</h1>
+                <p className="workspace-content-description">
+                  Review trade records, take required actions, and manage each
+                  trade through to completion.
+                </p>
               </div>
+              <a className="workspace-back-link" href="/workspace">
+                <span aria-hidden="true">←</span>
+                Back to overview
+              </a>
+            </div>
 
-              {selectedTrade && (
-                <section
-                  className="workspace-selected-trade"
-                  id="workspace-selected-trade"
-                  aria-labelledby="workspace-selected-trade-title"
-                >
-                  <div className="workspace-selected-trade-heading">
-                    <div>
-                      <span className="workspace-empty-index">SELECTED TRADE</span>
-                      <h3 id="workspace-selected-trade-title">
-                        Trade #{selectedTrade.tradeId}
-                      </h3>
-                      <p>{formatStatus(selectedTrade.state)}</p>
-                    </div>
-                    <button
-                      className="workspace-secondary-button"
-                      type="button"
-                      onClick={() => setSelectedTradeId(null)}
+            {statusError && (
+              <p className="workspace-error" role="alert">
+                {statusError}
+              </p>
+            )}
+
+            <section className="workspace-empty-panel workspace-trade-panel">
+              <span className="workspace-empty-index">02 / TRADE ACTIVITY</span>
+              <h2>Trade activity</h2>
+
+              {operationalDataState === "blocked" && (
+                <p>
+                  Trade records will appear here once trade services are ready.
+                  Please check back shortly.
+                </p>
+              )}
+
+              {operationalDataState === "loading" && (
+                <p>Loading your trade activity...</p>
+              )}
+
+              {operationalDataState === "error" && (
+                <p className="workspace-error" role="alert">
+                  {operationalDataError}
+                </p>
+              )}
+
+              {operationalDataState === "ready" && tradePage && (
+                <>
+                  <p>
+                    {tradePage.items.length === 0
+                      ? "No trades are associated with this account yet."
+                      : `${tradePage.items.length} trades found.`}
+                  </p>
+
+                  <div className="workspace-trade-grid">
+                    {tradePage.items.map((trade) => {
+                      const counterparty =
+                        trade.buyerAccount === session?.accountId
+                          ? trade.supplierAccount
+                          : trade.buyerAccount;
+                      const isSelected = selectedTradeId === trade.tradeId;
+
+                      return (
+                        <button
+                          className={`workspace-trade-card${
+                            isSelected ? " is-selected" : ""
+                          }`}
+                          key={trade.tradeId}
+                          type="button"
+                          onClick={() =>
+                            setSelectedTradeId(
+                              isSelected ? null : trade.tradeId
+                            )
+                          }
+                          aria-expanded={isSelected}
+                          aria-controls={
+                            isSelected ? "workspace-selected-trade" : undefined
+                          }
+                        >
+                          <span className="workspace-trade-card-topline">
+                            <span>TRADE #{trade.tradeId}</span>
+                            <span
+                              className="workspace-trade-card-arrow"
+                              aria-hidden="true"
+                            >
+                              {isSelected ? "−" : "↗"}
+                            </span>
+                          </span>
+                          <strong className="workspace-trade-card-status">
+                            {formatStatus(trade.state)}
+                          </strong>
+                          <span className="workspace-trade-card-counterparty">
+                            With {counterparty}
+                          </span>
+                          <span className="workspace-trade-card-meta">
+                            <span>
+                              {formatRawUsdcAmount(trade.amountRaw)} USDC
+                            </span>
+                            <span>{formatTradeDate(trade.createdAtNs)}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedTrade && (
+                    <section
+                      className="workspace-selected-trade"
+                      id="workspace-selected-trade"
+                      aria-labelledby="workspace-selected-trade-title"
                     >
-                      Close details
-                    </button>
-                  </div>
+                      <div className="workspace-selected-trade-heading">
+                        <div>
+                          <span className="workspace-empty-index">
+                            SELECTED TRADE
+                          </span>
+                          <h3 id="workspace-selected-trade-title">
+                            Trade #{selectedTrade.tradeId}
+                          </h3>
+                          <p>{formatStatus(selectedTrade.state)}</p>
+                        </div>
+                        <button
+                          className="workspace-secondary-button"
+                          type="button"
+                          onClick={() => setSelectedTradeId(null)}
+                        >
+                          Close details
+                        </button>
+                      </div>
 
-                  <div className="workspace-session-details workspace-selected-trade-summary">
-                    <div>
-                      <span>BUYER</span>
-                      <strong>{selectedTrade.buyerAccount}</strong>
-                    </div>
-                    <div>
-                      <span>SUPPLIER</span>
-                      <strong>{selectedTrade.supplierAccount}</strong>
-                    </div>
-                    <div>
-                      <span>INDEPENDENT REVIEWER</span>
-                      <strong>{selectedTrade.resolverAccount}</strong>
-                    </div>
-                    <div>
-                      <span>TRADE AMOUNT</span>
-                      <strong>{formatRawUsdcAmount(selectedTrade.amountRaw)} USDC</strong>
-                      <span>{selectedTrade.amountRaw} raw units</span>
-                    </div>
-                    <div>
-                      <span>PAYMENT TOKEN</span>
-                      <strong>{selectedTrade.paymentToken}</strong>
-                    </div>
-                    <div>
-                      <span>CREATED</span>
-                      <strong>{formatTradeDate(selectedTrade.createdAtNs)}</strong>
-                    </div>
-                    <div>
-                      <span>ACCEPTANCE DEADLINE</span>
-                      <strong>{formatTradeDate(selectedTrade.acceptByNs)}</strong>
-                    </div>
-                    <div>
-                      <span>FUNDED AT</span>
-                      <strong>{selectedTrade.fundedAtNs ? formatTradeDate(selectedTrade.fundedAtNs) : "Not funded"}</strong>
-                    </div>
-                  </div>
+                      <div className="workspace-session-details workspace-selected-trade-summary">
+                        <div>
+                          <span>BUYER</span>
+                          <strong>{selectedTrade.buyerAccount}</strong>
+                        </div>
+                        <div>
+                          <span>SUPPLIER</span>
+                          <strong>{selectedTrade.supplierAccount}</strong>
+                        </div>
+                        <div>
+                          <span>INDEPENDENT REVIEWER</span>
+                          <strong>{selectedTrade.resolverAccount}</strong>
+                        </div>
+                        <div>
+                          <span>TRADE AMOUNT</span>
+                          <strong>
+                            {formatRawUsdcAmount(selectedTrade.amountRaw)} USDC
+                          </strong>
+                          <span>{selectedTrade.amountRaw} raw units</span>
+                        </div>
+                        <div>
+                          <span>PAYMENT TOKEN</span>
+                          <strong>{selectedTrade.paymentToken}</strong>
+                        </div>
+                        <div>
+                          <span>CREATED</span>
+                          <strong>
+                            {formatTradeDate(selectedTrade.createdAtNs)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>ACCEPTANCE DEADLINE</span>
+                          <strong>
+                            {formatTradeDate(selectedTrade.acceptByNs)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>FUNDED AT</span>
+                          <strong>
+                            {selectedTrade.fundedAtNs
+                              ? formatTradeDate(selectedTrade.fundedAtNs)
+                              : "Not funded"}
+                          </strong>
+                        </div>
+                      </div>
 
-                  {selectedTrade.state === "AwaitingAcceptance" &&
-                    selectedTrade.supplierAccount === session?.accountId && (
-                      <button
-                        className="workspace-secondary-button workspace-selected-trade-action"
-                        type="button"
-                        onClick={() => handleAcceptTrade(selectedTrade.tradeId)}
-                        disabled={busy || !walletConnected}
-                      >
-                        {busy ? "Processing..." : "Accept trade"}
-                      </button>
+                      {selectedTrade.state === "AwaitingAcceptance" &&
+                        selectedTrade.supplierAccount ===
+                          session?.accountId && (
+                          <button
+                            className="workspace-secondary-button workspace-selected-trade-action"
+                            type="button"
+                            onClick={() =>
+                              handleAcceptTrade(selectedTrade.tradeId)
+                            }
+                            disabled={busy || !walletConnected}
+                          >
+                            {busy ? "Processing..." : "Accept trade"}
+                          </button>
+                        )}
+
+                      {selectedTrade.state === "Accepted" &&
+                        selectedTrade.buyerAccount === session?.accountId && (
+                          <button
+                            className="workspace-secondary-button workspace-selected-trade-action"
+                            type="button"
+                            onClick={() =>
+                              handleFundTrade(selectedTrade.tradeId)
+                            }
+                            disabled={busy || !walletConnected}
+                          >
+                            {busy
+                              ? "Processing..."
+                              : `Fund trade · ${formatRawUsdcAmount(
+                                  selectedTrade.amountRaw
+                                )} USDC`}
+                          </button>
+                        )}
+                    </section>
+                  )}
+
+                  {selectedTrade &&
+                    workspaceStatus?.infrastructure.contract.accountId &&
+                    session && (
+                      <TradeLifecyclePanel
+                        key={`lifecycle-${selectedTrade.tradeId}`}
+                        trade={selectedTrade}
+                        accountId={session.accountId}
+                        walletConnected={walletConnected}
+                        parentBusy={busy}
+                        onSuccess={setTransactionMessage}
+                        onWalletCall={(methodName, args, gas, deposit) =>
+                          submitWalletCall(
+                            workspaceStatus.infrastructure.contract.accountId!,
+                            methodName,
+                            args,
+                            gas,
+                            deposit
+                          )
+                        }
+                        onTokenWalletCall={(methodName, args, gas, deposit) =>
+                          submitWalletCall(
+                            "sdd.gidy515.testnet",
+                            methodName,
+                            args,
+                            gas,
+                            deposit
+                          )
+                        }
+                      />
                     )}
-
-                  {selectedTrade.state === "Accepted" &&
-                    selectedTrade.buyerAccount === session?.accountId && (
-                      <button
-                        className="workspace-secondary-button workspace-selected-trade-action"
-                        type="button"
-                        onClick={() => handleFundTrade(selectedTrade.tradeId)}
-                        disabled={busy || !walletConnected}
-                      >
-                        {busy
-                          ? "Processing..."
-                          : `Fund trade · ${formatRawUsdcAmount(selectedTrade.amountRaw)} USDC`}
-                      </button>
-                    )}
-                </section>
+                </>
               )}
+            </section>
 
-              {selectedTrade && workspaceStatus?.infrastructure.contract.accountId && session && (
-                <TradeLifecyclePanel
-                  key={`lifecycle-${selectedTrade.tradeId}`}
-                  trade={selectedTrade}
-                  accountId={session.accountId}
-                  walletConnected={walletConnected}
-                  parentBusy={busy}
-                  onSuccess={setTransactionMessage}
-                  onWalletCall={(methodName, args, gas, deposit) =>
-                    submitWalletCall(
-                      workspaceStatus.infrastructure.contract.accountId!,
-                      methodName,
-                      args,
-                      gas,
-                      deposit
-                    )
-                  }
-                  onTokenWalletCall={(methodName, args, gas, deposit) =>
-                    submitWalletCall(
-                      "sdd.gidy515.testnet",
-                      methodName,
-                      args,
-                      gas,
-                      deposit
-                    )
-                  }
-                />
-              )}
-            </>
-          )}
-        </section>
-
-        {error && (
-          <p className="workspace-error" role="alert">
-            {error}
-          </p>
-        )}
+            {error && (
+              <p className="workspace-error" role="alert">
+                {error}
+              </p>
+            )}
           </>
         )}
       </section>
