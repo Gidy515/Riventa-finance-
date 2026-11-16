@@ -22,7 +22,9 @@ import { TradeLifecyclePanel } from "@/components/auth/trade-lifecycle-panel";
 import type {
   AuthSession,
   MandatePage,
+  TradeCursor,
   TradePage,
+  TradeRecord,
   WorkspaceStatus,
 } from "@/lib/auth-client";
 
@@ -72,6 +74,16 @@ function describeError(error: unknown): string {
   }
 
   return error.message;
+}
+
+function formatTradeDate(value: string): string {
+  try {
+    const milliseconds = Number(BigInt(value) / BigInt(1_000_000));
+    if (!Number.isFinite(milliseconds)) return "—";
+    return new Date(milliseconds).toLocaleString();
+  } catch {
+    return "—";
+  }
 }
 
 function formatStatus(value: string): string {
@@ -145,6 +157,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
   const [error, setError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [tradePage, setTradePage] = useState<TradePage | null>(null);
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [mandatePage, setMandatePage] = useState<MandatePage | null>(null);
   const [operationalDataState, setOperationalDataState] =
     useState<OperationalDataState>("blocked");
@@ -182,14 +195,25 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     setOperationalDataError(null);
 
     try {
-      const [trades, mandates] = await Promise.all([
-        listTrades({ limit: 10 }),
+      const [allTrades, mandates] = await Promise.all([
+        (async () => {
+          const items: TradeRecord[] = [];
+          let cursor: TradeCursor | undefined;
+
+          do {
+            const page = await listTrades({ limit: 10, cursor });
+            items.push(...page.items);
+            cursor = page.nextCursor ?? undefined;
+          } while (cursor);
+
+          return items;
+        })(),
         listMandates({ limit: 10 }),
       ]);
 
       if (!mountedRef.current) return;
 
-      setTradePage(trades);
+      setTradePage({ items: allTrades, nextCursor: null });
       setMandatePage(mandates);
       setOperationalDataState("ready");
     } catch (caught) {
@@ -255,6 +279,16 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!transactionMessage) return;
+
+    const timeout = window.setTimeout(() => {
+      setTransactionMessage(null);
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [transactionMessage]);
 
   async function handleConnectWallet() {
     if (busy) return;
@@ -486,8 +520,8 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
 
       setTransactionMessage(
         tradeId !== null
-          ? `Trade proposal submitted successfully. Trade ID: ${tradeId}.`
-          : "Trade proposal submitted. Refresh trade activity to check its status."
+          ? `Trade created successfully · Trade ID ${tradeId}`
+          : "Trade proposal submitted successfully. Refresh trade activity to confirm its status."
       );
 
       setSupplierAccount("");
@@ -620,8 +654,8 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     return (
       <main className="workspace-screen">
         <div className="workspace-loading">
-          <span className="workspace-status-dot" />
-          <p>Checking your Riventa session...</p>
+          <span className="workspace-loading-spinner" aria-hidden="true" />
+          <p>Opening your workspace</p>
         </div>
       </main>
     );
@@ -731,9 +765,25 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
   }
 
   const infrastructure = workspaceStatus?.infrastructure;
+  const selectedTrade =
+    tradePage?.items.find((trade) => trade.tradeId === selectedTradeId) ?? null;
 
   return (
     <main className="workspace-screen">
+      {transactionMessage && (
+        <div className="workspace-toast" role="status" aria-live="polite">
+          <span className="workspace-toast-icon" aria-hidden="true">✓</span>
+          <span>{transactionMessage}</span>
+          <button
+            type="button"
+            className="workspace-toast-dismiss"
+            aria-label="Dismiss notification"
+            onClick={() => setTransactionMessage(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <header className="workspace-topbar">
         <a className="workspace-wordmark" href="/">
           <img className="brand-mark" src="/riventa-mark.svg" alt="" />
@@ -1002,10 +1052,6 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
               <strong>{session?.accountId}</strong>
             </div>
             <div>
-              <span>ENVIRONMENT</span>
-              <strong>{session?.network}</strong>
-            </div>
-            <div>
               <span>SESSION EXPIRY</span>
               <strong>
                 {session?.expiresAt
@@ -1015,12 +1061,6 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
             </div>
           </div>
         </section>
-
-        {transactionMessage && (
-          <p className="workspace-transaction-message" role="status">
-            {transactionMessage}
-          </p>
-        )}
 
         {error && (
           <p className="workspace-error" role="alert">
@@ -1078,94 +1118,159 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                   : `${tradePage.items.length} trades found.`}
               </p>
 
-              {tradePage.items.map((trade) => (
-                <div className="workspace-session-details" key={trade.tradeId}>
-                  <div>
-                    <span>TRADE REFERENCE</span>
-                    <strong>{trade.tradeId}</strong>
-                  </div>
-                  <div>
-                    <span>STATUS</span>
-                    <strong>{formatStatus(trade.state)}</strong>
-                  </div>
-                  <div>
-                    <span>COUNTERPARTY</span>
-                    <strong>
-                      {trade.buyerAccount === session?.accountId
-                        ? trade.supplierAccount
-                        : trade.buyerAccount}
-                    </strong>
+              <div className="workspace-trade-grid">
+                {tradePage.items.map((trade) => {
+                  const counterparty =
+                    trade.buyerAccount === session?.accountId
+                      ? trade.supplierAccount
+                      : trade.buyerAccount;
+                  const isSelected = selectedTradeId === trade.tradeId;
+
+                  return (
+                    <button
+                      className={`workspace-trade-card${isSelected ? " is-selected" : ""}`}
+                      key={trade.tradeId}
+                      type="button"
+                      onClick={() => setSelectedTradeId(isSelected ? null : trade.tradeId)}
+                      aria-expanded={isSelected}
+                      aria-controls={isSelected ? "workspace-selected-trade" : undefined}
+                    >
+                      <span className="workspace-trade-card-topline">
+                        <span>TRADE #{trade.tradeId}</span>
+                        <span className="workspace-trade-card-arrow" aria-hidden="true">
+                          {isSelected ? "−" : "↗"}
+                        </span>
+                      </span>
+                      <strong className="workspace-trade-card-status">
+                        {formatStatus(trade.state)}
+                      </strong>
+                      <span className="workspace-trade-card-counterparty">
+                        With {counterparty}
+                      </span>
+                      <span className="workspace-trade-card-meta">
+                        <span>{trade.amountRaw} raw units</span>
+                        <span>{formatTradeDate(trade.createdAtNs)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedTrade && (
+                <section
+                  className="workspace-selected-trade"
+                  id="workspace-selected-trade"
+                  aria-labelledby="workspace-selected-trade-title"
+                >
+                  <div className="workspace-selected-trade-heading">
+                    <div>
+                      <span className="workspace-empty-index">SELECTED TRADE</span>
+                      <h3 id="workspace-selected-trade-title">
+                        Trade #{selectedTrade.tradeId}
+                      </h3>
+                      <p>{formatStatus(selectedTrade.state)}</p>
+                    </div>
+                    <button
+                      className="workspace-secondary-button"
+                      type="button"
+                      onClick={() => setSelectedTradeId(null)}
+                    >
+                      Close details
+                    </button>
                   </div>
 
-                  {trade.state === "AwaitingAcceptance" &&
-                    trade.supplierAccount === session?.accountId && (
+                  <div className="workspace-session-details workspace-selected-trade-summary">
+                    <div>
+                      <span>BUYER</span>
+                      <strong>{selectedTrade.buyerAccount}</strong>
+                    </div>
+                    <div>
+                      <span>SUPPLIER</span>
+                      <strong>{selectedTrade.supplierAccount}</strong>
+                    </div>
+                    <div>
+                      <span>INDEPENDENT REVIEWER</span>
+                      <strong>{selectedTrade.resolverAccount}</strong>
+                    </div>
+                    <div>
+                      <span>TRADE AMOUNT (RAW TOKEN UNITS)</span>
+                      <strong>{selectedTrade.amountRaw}</strong>
+                    </div>
+                    <div>
+                      <span>PAYMENT TOKEN</span>
+                      <strong>{selectedTrade.paymentToken}</strong>
+                    </div>
+                    <div>
+                      <span>CREATED</span>
+                      <strong>{formatTradeDate(selectedTrade.createdAtNs)}</strong>
+                    </div>
+                    <div>
+                      <span>ACCEPTANCE DEADLINE</span>
+                      <strong>{formatTradeDate(selectedTrade.acceptByNs)}</strong>
+                    </div>
+                    <div>
+                      <span>FUNDED AT</span>
+                      <strong>{selectedTrade.fundedAtNs ? formatTradeDate(selectedTrade.fundedAtNs) : "Not funded"}</strong>
+                    </div>
+                  </div>
+
+                  {selectedTrade.state === "AwaitingAcceptance" &&
+                    selectedTrade.supplierAccount === session?.accountId && (
                       <button
-                        className="workspace-secondary-button"
+                        className="workspace-secondary-button workspace-selected-trade-action"
                         type="button"
-                        onClick={() => handleAcceptTrade(trade.tradeId)}
+                        onClick={() => handleAcceptTrade(selectedTrade.tradeId)}
                         disabled={busy || !walletConnected}
                       >
                         {busy ? "Processing..." : "Accept trade"}
                       </button>
                     )}
 
-                  {trade.state === "Accepted" &&
-                    trade.buyerAccount === session?.accountId && (
+                  {selectedTrade.state === "Accepted" &&
+                    selectedTrade.buyerAccount === session?.accountId && (
                       <button
-                        className="workspace-secondary-button"
+                        className="workspace-secondary-button workspace-selected-trade-action"
                         type="button"
-                        onClick={() => handleFundTrade(trade.tradeId)}
+                        onClick={() => handleFundTrade(selectedTrade.tradeId)}
                         disabled={busy || !walletConnected}
                       >
                         {busy ? "Processing..." : "Fund trade · 10,000 SDD"}
                       </button>
                     )}
-                </div>
-              ))}
+                </section>
+              )}
 
-              {tradePage.items.map((trade) => {
-                const contractId =
-                  workspaceStatus?.infrastructure.contract.accountId;
-
-                if (!contractId || !session) return null;
-
-                return (
-                  <TradeLifecyclePanel
-                    key={`lifecycle-${trade.tradeId}`}
-                    trade={trade}
-                    accountId={session.accountId}
-                    walletConnected={walletConnected}
-                    parentBusy={busy}
-                    onWalletCall={(methodName, args, gas, deposit) =>
-                      submitWalletCall(
-                        contractId,
-                        methodName,
-                        args,
-                        gas,
-                        deposit
-                      )
-                    }
-                    onTokenWalletCall={(methodName, args, gas, deposit) =>
-                      submitWalletCall(
-                        "sdd.gidy515.testnet",
-                        methodName,
-                        args,
-                        gas,
-                        deposit
-                      )
-                    }
-                  />
-                );
-              })}
+              {selectedTrade && workspaceStatus?.infrastructure.contract.accountId && session && (
+                <TradeLifecyclePanel
+                  key={`lifecycle-${selectedTrade.tradeId}`}
+                  trade={selectedTrade}
+                  accountId={session.accountId}
+                  walletConnected={walletConnected}
+                  parentBusy={busy}
+                  onSuccess={setTransactionMessage}
+                  onWalletCall={(methodName, args, gas, deposit) =>
+                    submitWalletCall(
+                      workspaceStatus.infrastructure.contract.accountId!,
+                      methodName,
+                      args,
+                      gas,
+                      deposit
+                    )
+                  }
+                  onTokenWalletCall={(methodName, args, gas, deposit) =>
+                    submitWalletCall(
+                      "sdd.gidy515.testnet",
+                      methodName,
+                      args,
+                      gas,
+                      deposit
+                    )
+                  }
+                />
+              )}
             </>
           )}
         </section>
-
-        {transactionMessage && (
-          <p className="workspace-transaction-message" role="status">
-            {transactionMessage}
-          </p>
-        )}
 
         {error && (
           <p className="workspace-error" role="alert">
