@@ -9,7 +9,7 @@ const AgentSimulator = dynamic(
     ssr: false,
     loading: () => (
       <div className="simulator-loading" aria-label="Loading simulator">
-        Loading the mandate simulator…
+        Loading the permissions preview…
       </div>
     ),
   },
@@ -48,7 +48,7 @@ export function AgentSimulatorLoader() {
         <AgentSimulator />
       ) : (
         <div className="simulator-loading">
-          The interactive mandate simulator loads when it comes into view.
+          The interactive permissions preview will appear here.
         </div>
       )}
     </div>

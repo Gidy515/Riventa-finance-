@@ -25,7 +25,7 @@ export function AgentSimulator() {
   const [expired, setExpired] = useState(false);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [result, setResult] = useState(
-    "Set the mandate terms, then ask the agent to propose a trade.",
+    "Set the assistant’s permissions, then see whether it can propose a trade.",
   );
   const [nextId, setNextId] = useState(1);
   const reducedMotion = useReducedMotion();
@@ -65,44 +65,44 @@ export function AgentSimulator() {
     const approved = approvedSupplier.trim();
 
     if (!Number.isFinite(proposedAmount) || proposedAmount <= 0) {
-      setResult("Rejected: enter a trade amount greater than zero.");
+      setResult("Please enter a trade amount greater than zero.");
       return;
     }
 
     if (!Number.isFinite(currentBudget) || currentBudget <= 0) {
-      setResult("Rejected: the mandate budget must be greater than zero.");
+      setResult("Not allowed: the spending limit must be greater than zero.");
       return;
     }
 
     if (!Number.isFinite(tradeCap) || tradeCap <= 0) {
-      setResult("Rejected: the per-trade cap must be greater than zero.");
+      setResult("Please set a maximum per trade greater than zero.");
       return;
     }
 
     if (!approved || !supplier || supplier.toLowerCase() !== approved.toLowerCase()) {
       setResult(
-        "Rejected: this supplier is not on the mandate's approved supplier list.",
+        "Not allowed: this supplier has not been approved by the buyer.",
       );
       return;
     }
 
     if (expired) {
       setResult(
-        "Rejected: this mandate has expired. The agent cannot propose a new trade.",
+        "Not allowed: this permission has expired. The assistant cannot propose a new trade.",
       );
       return;
     }
 
     if (proposedAmount > tradeCap) {
       setResult(
-        `Rejected: ${money(proposedAmount)} exceeds the per-trade cap of ${money(tradeCap)}.`,
+        `Not allowed: ${money(proposedAmount)} is above the maximum of ${money(tradeCap)} for one trade.`,
       );
       return;
     }
 
     if (totals.committed + proposedAmount > currentBudget) {
       setResult(
-        `Rejected: this trade would exceed the total budget. ${money(totals.committed)} is already reserved or consumed.`,
+        `Not allowed: this trade would exceed the total spending limit. ${money(totals.committed)} is already committed.`,
       );
       return;
     }
@@ -118,7 +118,7 @@ export function AgentSimulator() {
     ]);
     setNextId((current) => current + 1);
     setResult(
-      `Accepted: ${money(proposedAmount)} reserved for ${supplier}. The buyer must fund the trade.`,
+      `Accepted: ${money(proposedAmount)} set aside for ${supplier}. The buyer must approve the payment.`,
     );
   }
 
@@ -132,7 +132,7 @@ export function AgentSimulator() {
       ),
     );
     setResult(
-      `Buyer funded ${money(reservation.amount)} for ${reservation.supplier}. The amount moved from reserved to consumed.`,
+      `The buyer approved the ${money(reservation.amount)} payment for ${reservation.supplier}.`,
     );
   }
 
@@ -145,9 +145,9 @@ export function AgentSimulator() {
       <div className="simulator-heading">
         <div>
           <span className="eyebrow">TRY THE RULES</span>
-          <h3 id="simulator-title">Agent mandate simulator</h3>
+          <h3 id="simulator-title">Assistant permissions preview</h3>
           <p>
-            Change the mandate, submit a proposed trade and see how the
+            Change the permissions, submit a proposed trade and see how Riventa
             constraints affect the result.
           </p>
         </div>
@@ -157,7 +157,7 @@ export function AgentSimulator() {
       <div className="simulator-grid">
         <div className="simulator-controls">
           <label className="simulator-field">
-            <span>Total mandate budget</span>
+            <span>Total spending limit</span>
             <span className="simulator-input-wrap">
               <span aria-hidden="true">$</span>
               <input
@@ -171,7 +171,7 @@ export function AgentSimulator() {
           </label>
 
           <label className="simulator-field">
-            <span>Per-trade cap</span>
+            <span>Maximum per trade</span>
             <span className="simulator-input-wrap">
               <span aria-hidden="true">$</span>
               <input
@@ -222,7 +222,7 @@ export function AgentSimulator() {
               checked={expired}
               onChange={(event) => setExpired(event.target.checked)}
             />
-            <span>Mandate has expired</span>
+            <span>Permission has expired</span>
           </label>
 
           <button
@@ -230,21 +230,21 @@ export function AgentSimulator() {
             type="button"
             onClick={proposeTrade}
           >
-            Agent proposes a trade of {amount || "0"} with{" "}
+            Assistant proposes a trade of {amount || "0"} with{" "}
             {proposedSupplier.trim() || "this supplier"}
           </button>
         </div>
 
         <div className="simulator-results">
           <div className="budget-summary">
-            <span className="eyebrow">MANDATE BUDGET</span>
+            <span className="eyebrow">TOTAL SPENDING LIMIT</span>
             <strong>${money(totalBudget)}</strong>
           </div>
 
           <div
             className="budget-bar"
             role="img"
-            aria-label={`Budget allocation: ${money(totals.consumed)} consumed, ${money(totals.reserved)} reserved, ${money(free)} free.`}
+            aria-label={`Budget allocation: ${money(totals.consumed)} spent, ${money(totals.reserved)} reserved, ${money(free)} free.`}
           >
             <span
               className="budget-segment consumed"
@@ -263,12 +263,12 @@ export function AgentSimulator() {
           <div className="budget-legend">
             <div>
               <span className="legend-dot consumed-dot" />
-              <span>Consumed</span>
+              <span>Spent</span>
               <strong>${money(totals.consumed)}</strong>
             </div>
             <div>
               <span className="legend-dot reserved-dot" />
-              <span>Reserved</span>
+              <span>Set aside</span>
               <strong>${money(totals.reserved)}</strong>
             </div>
             <div>
@@ -281,12 +281,12 @@ export function AgentSimulator() {
           {shortfall > 0 && (
             <p className="simulator-warning">
               Existing commitments exceed the edited budget by ${money(shortfall)}.
-              New proposals will be rejected until the budget covers them.
+              New proposals will not be accepted until the spending limit covers them.
             </p>
           )}
 
           <p className="budget-invariant">
-            Rule: budget ≥ reserved + consumed
+            Your limit must cover both reserved and spent amounts
           </p>
 
           <div className="simulator-result" aria-live="polite" aria-atomic="true">
@@ -306,8 +306,8 @@ export function AgentSimulator() {
                     <span>{reservation.supplier}</span>
                     <small>
                       {reservation.status === "reserved"
-                        ? "Reserved · awaiting buyer funding"
-                        : "Consumed · buyer funded"}
+                        ? "Awaiting buyer approval"
+                        : "Paid by buyer"}
                     </small>
                   </div>
                   {reservation.status === "reserved" && (
@@ -316,7 +316,7 @@ export function AgentSimulator() {
                       type="button"
                       onClick={() => fundReservation(reservation.id)}
                     >
-                      Buyer funds it
+                      Buyer approves payment
                     </button>
                   )}
                 </div>
@@ -325,8 +325,8 @@ export function AgentSimulator() {
           </div>
 
           <p className="simulator-disclaimer">
-            The agent can propose within its mandate; it cannot move the
-            buyer&apos;s funds. Only the buyer funds escrow.
+            The assistant can propose trades within its permissions; it cannot move the
+            buyer&apos;s funds. Only the buyer approves and releases the payment.
           </p>
         </div>
       </div>

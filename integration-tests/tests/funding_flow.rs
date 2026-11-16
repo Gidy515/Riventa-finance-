@@ -135,6 +135,7 @@ async fn funding_flow_accepts_valid_transfer_and_refunds_rejected_transfer() -> 
         .args_json(json!({
             "supplier": supplier.id(),
             "proposed_resolver": resolver.id(),
+            "amount": FUNDING_AMOUNT,
             "inspection_criteria_commitment": vec![1u8; 32],
             "refund_terms_commitment": vec![2u8; 32],
             "agreement_commitment": vec![3u8; 32],
@@ -324,6 +325,7 @@ async fn settlement_flow_executes_real_payout_and_refund_transfers() -> Result<(
         .args_json(json!({
             "supplier": supplier.id(),
             "proposed_resolver": resolver.id(),
+            "amount": FUNDING_AMOUNT,
             "inspection_criteria_commitment": vec![7u8; 32],
             "refund_terms_commitment": vec![8u8; 32],
             "agreement_commitment": vec![9u8; 32],
@@ -460,6 +462,7 @@ async fn settlement_flow_executes_real_payout_and_refund_transfers() -> Result<(
         .args_json(json!({
             "supplier": supplier.id(),
             "proposed_resolver": resolver.id(),
+            "amount": FUNDING_AMOUNT,
             "inspection_criteria_commitment": vec![10u8; 32],
             "refund_terms_commitment": vec![11u8; 32],
             "agreement_commitment": vec![12u8; 32],
@@ -710,6 +713,7 @@ async fn mandate_authorized_settlements_execute_real_nep141_transfers() -> Resul
             .call(riventa.id(), "create_trade_under_mandate")
             .args_json(json!({
                 "mandate_id": mandate_id,
+                "amount": FUNDING_AMOUNT,
                 "inspection_criteria_commitment": vec![7u8; 32],
                 "refund_terms_commitment": vec![8u8; 32],
                 "agreement_commitment": vec![9u8; 32],

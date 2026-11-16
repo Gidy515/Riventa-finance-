@@ -36,7 +36,6 @@ const ADMIN_PROPOSAL_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
 const SUPPLIER_DOCUMENT_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
 const INSPECTOR_ASSIGNMENT_WINDOW_NS: u64 = 3 * 24 * 60 * 60 * 1_000_000_000;
 const INSPECTION_WINDOW_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
-const REQUIRED_FUNDING_AMOUNT: u128 = 10_000_000_000;
 const MAX_FUNDING_MSG_BYTES: usize = 64;
 const ADMIN_COUNT: usize = 3;
 const ADMIN_APPROVAL_THRESHOLD: usize = 2;
@@ -122,10 +121,7 @@ impl Riventa {
             expires_at > env::block_timestamp(),
             "MANDATE_EXPIRY_MUST_BE_IN_FUTURE",
         );
-        require(
-            max_trade_amount.0 >= REQUIRED_FUNDING_AMOUNT,
-            "MANDATE_MAX_TRADE_BELOW_REQUIRED_AMOUNT",
-        );
+        require(max_trade_amount.0 > 0, "MANDATE_MAX_TRADE_MUST_BE_POSITIVE");
         require(
             aggregate_budget.0 >= max_trade_amount.0,
             "MANDATE_BUDGET_BELOW_MAX_TRADE",
@@ -187,10 +183,7 @@ impl Riventa {
             expires_at > env::block_timestamp(),
             "MANDATE_EXPIRY_MUST_BE_IN_FUTURE",
         );
-        require(
-            max_trade_amount.0 >= REQUIRED_FUNDING_AMOUNT,
-            "MANDATE_MAX_TRADE_BELOW_REQUIRED_AMOUNT",
-        );
+        require(max_trade_amount.0 > 0, "MANDATE_MAX_TRADE_MUST_BE_POSITIVE");
 
         let committed_budget = mandate
             .reserved_budget
@@ -336,11 +329,13 @@ impl Riventa {
         &mut self,
         supplier: AccountId,
         proposed_resolver: AccountId,
+        amount: U128,
         inspection_criteria_commitment: Vec<u8>,
         refund_terms_commitment: Vec<u8>,
         agreement_commitment: Vec<u8>,
     ) -> u64 {
         require(!self.paused, "NEW_TRADES_PAUSED");
+        require(amount.0 > 0, "TRADE_AMOUNT_MUST_BE_POSITIVE");
         require(
             inspection_criteria_commitment.len() == 32,
             "INVALID_INSPECTION_COMMITMENT",
@@ -381,7 +376,7 @@ impl Riventa {
             supplier,
             resolver: proposed_resolver,
             payment_token: self.token_contract.clone(),
-            amount: REQUIRED_FUNDING_AMOUNT,
+            amount: amount.0,
             state: TradeState::AwaitingAcceptance,
             created_at: now,
             accept_by: now
@@ -407,11 +402,13 @@ impl Riventa {
     pub fn create_trade_under_mandate(
         &mut self,
         mandate_id: u64,
+        amount: U128,
         inspection_criteria_commitment: Vec<u8>,
         refund_terms_commitment: Vec<u8>,
         agreement_commitment: Vec<u8>,
     ) -> u64 {
         require(!self.paused, "NEW_TRADES_PAUSED");
+        require(amount.0 > 0, "TRADE_AMOUNT_MUST_BE_POSITIVE");
 
         require(
             inspection_criteria_commitment.len() == 32,
@@ -443,14 +440,14 @@ impl Riventa {
             "MANDATE_TOKEN_NOT_SUPPORTED",
         );
         require(
-            REQUIRED_FUNDING_AMOUNT <= mandate.max_trade_amount,
+            amount.0 <= mandate.max_trade_amount,
             "TRADE_EXCEEDS_MANDATE_MAX_AMOUNT",
         );
 
         let next_committed_budget = mandate
             .reserved_budget
             .checked_add(mandate.consumed_budget)
-            .and_then(|value| value.checked_add(REQUIRED_FUNDING_AMOUNT))
+            .and_then(|value| value.checked_add(amount.0))
             .expect("MANDATE_BUDGET_OVERFLOW");
 
         require(
@@ -462,7 +459,7 @@ impl Riventa {
         // NEAR transaction execution is atomic: a later panic rolls this back.
         mandate.reserved_budget = mandate
             .reserved_budget
-            .checked_add(REQUIRED_FUNDING_AMOUNT)
+            .checked_add(amount.0)
             .expect("MANDATE_RESERVED_BUDGET_OVERFLOW");
 
         let now = env::block_timestamp();
@@ -479,7 +476,7 @@ impl Riventa {
             supplier: mandate.supplier.clone(),
             resolver: mandate.resolver.clone(),
             payment_token: mandate.payment_token.clone(),
-            amount: REQUIRED_FUNDING_AMOUNT,
+            amount: amount.0,
             state: TradeState::AwaitingAcceptance,
             created_at: now,
             accept_by: now
@@ -510,7 +507,7 @@ impl Riventa {
             supplier: mandate.supplier.clone(),
             resolver: mandate.resolver.clone(),
             payment_token: mandate.payment_token.clone(),
-            amount: REQUIRED_FUNDING_AMOUNT,
+            amount: amount.0,
             allow_release_after_pass: mandate.allow_release_after_pass,
             allow_refund_after_fail: mandate.allow_refund_after_fail,
             mandate_expires_at: mandate.expires_at,
@@ -1660,7 +1657,6 @@ impl FungibleTokenReceiver for Riventa {
             || trade.payment_token != env::predecessor_account_id()
             || trade.state != TradeState::Accepted
             || amount.0 != trade.amount
-            || amount.0 != REQUIRED_FUNDING_AMOUNT
             || now >= fund_by
         {
             return unused();
@@ -1754,6 +1750,8 @@ mod tests {
     use near_sdk::test_utils::VMContextBuilder;
     use near_sdk::testing_env;
 
+    const REQUIRED_FUNDING_AMOUNT: u128 = 10_000_000_000;
+
     fn account(value: &str) -> AccountId {
         value.parse().unwrap()
     }
@@ -1786,6 +1784,7 @@ mod tests {
         let id = contract.create_trade(
             account("supplier.testnet"),
             account("resolver.testnet"),
+            U128(REQUIRED_FUNDING_AMOUNT),
             commitment(),
             commitment(),
             commitment(),
@@ -1978,9 +1977,24 @@ mod tests {
     }
 
     fn create_agent_trade(contract: &mut Riventa, mandate_id: u64, now: u64) -> u64 {
+        create_agent_trade_with_amount(contract, mandate_id, now, REQUIRED_FUNDING_AMOUNT)
+    }
+
+    fn create_agent_trade_with_amount(
+        contract: &mut Riventa,
+        mandate_id: u64,
+        now: u64,
+        amount: u128,
+    ) -> u64 {
         context("agent.testnet", now);
 
-        contract.create_trade_under_mandate(mandate_id, commitment(), commitment(), commitment())
+        contract.create_trade_under_mandate(
+            mandate_id,
+            U128(amount),
+            commitment(),
+            commitment(),
+            commitment(),
+        )
     }
 
     fn create_test_mandate_with_permissions(
@@ -2085,7 +2099,13 @@ mod tests {
 
         context("attacker.testnet", 2_000);
 
-        contract.create_trade_under_mandate(mandate_id, commitment(), commitment(), commitment());
+        contract.create_trade_under_mandate(
+            mandate_id,
+            U128(REQUIRED_FUNDING_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
     }
 
     #[test]
@@ -2135,7 +2155,13 @@ mod tests {
         contract.revoke_mandate(mandate_id);
 
         context("agent.testnet", 3_000);
-        contract.create_trade_under_mandate(mandate_id, commitment(), commitment(), commitment());
+        contract.create_trade_under_mandate(
+            mandate_id,
+            U128(REQUIRED_FUNDING_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
     }
 
     #[test]
@@ -2147,7 +2173,13 @@ mod tests {
             create_test_mandate(&mut contract, 1_000, REQUIRED_FUNDING_AMOUNT * 2, 2_000);
 
         context("agent.testnet", 2_000);
-        contract.create_trade_under_mandate(mandate_id, commitment(), commitment(), commitment());
+        contract.create_trade_under_mandate(
+            mandate_id,
+            U128(REQUIRED_FUNDING_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
     }
 
     #[test]
@@ -2534,6 +2566,116 @@ mod tests {
     }
 
     #[test]
+    fn buyer_creates_trade_with_custom_amount() {
+        const CUSTOM_AMOUNT: u128 = 3_250_000_000;
+
+        let mut contract = contract();
+        context("buyer.testnet", 1_000);
+
+        let trade_id = contract.create_trade(
+            account("supplier.testnet"),
+            account("resolver.testnet"),
+            U128(CUSTOM_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
+
+        let trade = contract.get_trade(trade_id).unwrap();
+        assert_eq!(trade.amount, CUSTOM_AMOUNT.to_string());
+    }
+
+    #[test]
+    fn agent_trade_with_custom_amount_updates_trade_snapshot_and_budget() {
+        const CUSTOM_AMOUNT: u128 = 3_250_000_000;
+
+        let mut contract = contract();
+        let mandate_id =
+            create_test_mandate(&mut contract, 1_000, REQUIRED_FUNDING_AMOUNT * 2, 100_000);
+
+        let trade_id =
+            create_agent_trade_with_amount(&mut contract, mandate_id, 2_000, CUSTOM_AMOUNT);
+
+        let trade = contract.get_trade(trade_id).unwrap();
+        let snapshot = contract.get_trade_policy_snapshot(trade_id).unwrap();
+        let mandate = contract.mandates.get(&mandate_id).unwrap();
+
+        assert_eq!(trade.amount, CUSTOM_AMOUNT.to_string());
+        assert_eq!(snapshot.amount.0, CUSTOM_AMOUNT);
+        assert_eq!(mandate.reserved_budget, CUSTOM_AMOUNT);
+        assert_eq!(mandate.consumed_budget, 0);
+    }
+
+    #[test]
+    fn exact_custom_amount_funds_trade() {
+        const CUSTOM_AMOUNT: u128 = 3_250_000_000;
+
+        let mut contract = contract();
+        context("buyer.testnet", 1_000);
+        let trade_id = contract.create_trade(
+            account("supplier.testnet"),
+            account("resolver.testnet"),
+            U128(CUSTOM_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
+
+        context("supplier.testnet", 1_001);
+        contract.accept_trade(trade_id);
+
+        let unused = receive(
+            &mut contract,
+            "sdd.testnet",
+            "buyer.testnet",
+            2_000,
+            CUSTOM_AMOUNT,
+            &format!(r#"{{"trade_id":{trade_id}}}"#),
+        );
+
+        assert_eq!(unused, 0);
+        assert_eq!(
+            contract.get_trade(trade_id).unwrap().state,
+            TradeState::Funded
+        );
+    }
+
+    #[test]
+    fn one_raw_unit_less_than_custom_amount_is_refunded() {
+        const CUSTOM_AMOUNT: u128 = 3_250_000_000;
+
+        let mut contract = contract();
+        context("buyer.testnet", 1_000);
+        let trade_id = contract.create_trade(
+            account("supplier.testnet"),
+            account("resolver.testnet"),
+            U128(CUSTOM_AMOUNT),
+            commitment(),
+            commitment(),
+            commitment(),
+        );
+
+        context("supplier.testnet", 1_001);
+        contract.accept_trade(trade_id);
+
+        let short_amount = CUSTOM_AMOUNT - 1;
+        let unused = receive(
+            &mut contract,
+            "sdd.testnet",
+            "buyer.testnet",
+            2_000,
+            short_amount,
+            &format!(r#"{{"trade_id":{trade_id}}}"#),
+        );
+
+        assert_eq!(unused, short_amount);
+        assert_eq!(
+            contract.get_trade(trade_id).unwrap().state,
+            TradeState::Accepted
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "ONLY_SUPPLIER_MAY_ACCEPT")]
     fn unrelated_account_cannot_accept() {
         let mut contract = contract();
@@ -2541,6 +2683,7 @@ mod tests {
         let id = contract.create_trade(
             account("supplier.testnet"),
             account("resolver.testnet"),
+            U128(REQUIRED_FUNDING_AMOUNT),
             commitment(),
             commitment(),
             commitment(),
@@ -2556,6 +2699,7 @@ mod tests {
         let id = contract.create_trade(
             account("supplier.testnet"),
             account("resolver.testnet"),
+            U128(REQUIRED_FUNDING_AMOUNT),
             commitment(),
             commitment(),
             commitment(),

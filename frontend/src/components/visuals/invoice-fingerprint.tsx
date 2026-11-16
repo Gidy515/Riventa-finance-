@@ -101,7 +101,7 @@ export function InvoiceFingerprint() {
 
           <div className="ledger-record">
             <span className="ledger-indicator" aria-hidden="true" />
-            <span>Commitment recorded on NEAR</span>
+            <span>Verification record saved on NEAR</span>
             <span className="ledger-tag">ILLUSTRATIVE</span>
           </div>
         </div>

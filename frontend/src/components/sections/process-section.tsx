@@ -74,10 +74,10 @@ export function ProcessSection() {
                   <h3>{step.title}</h3>
                   <p>{step.description}</p>
                   <span className="process-mobile-meta">
-                    <strong>Actor:</strong> {step.actor}
+                    <strong>Who is involved:</strong> {step.actor}
                   </span>
                   <span className="process-mobile-meta">
-                    <strong>Contract check:</strong> {step.contractCheck}
+                    <strong>What is checked:</strong> {step.contractCheck}
                   </span>
                 </div>
               </article>
@@ -91,11 +91,11 @@ export function ProcessSection() {
             </span>
             <h3>{currentStep.title}</h3>
             <div className="process-detail-block">
-              <span>WHO ACTS</span>
+              <span>WHO IS INVOLVED</span>
               <p>{currentStep.actor}</p>
             </div>
             <div className="process-detail-block">
-              <span>WHAT THE CONTRACT CHECKS</span>
+              <span>WHAT IS CHECKED</span>
               <p>{currentStep.contractCheck}</p>
             </div>
           </aside>
@@ -103,7 +103,7 @@ export function ProcessSection() {
 
         <div className="deadline-strip">
           <div className="deadline-heading">
-            <span className="eyebrow">CONTRACT DEADLINES</span>
+            <span className="eyebrow">TRADE DEADLINES</span>
             <p>Time limits between required actions.</p>
           </div>
           <div className="deadline-items">

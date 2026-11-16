@@ -2,7 +2,7 @@ export const siteContent = {
   brand: "Riventa",
   socialImage: {
     alt: "Riventa — conditional trade settlement",
-    eyebrow: "TRADE OPERATIONS · NEAR",
+    eyebrow: "CROSS BORDER TRADE OPERATIONS · NEAR",
     footerLeft: "Confidential trade operations",
     footerRight: "Conditional settlement",
   },
@@ -31,29 +31,29 @@ export const siteContent = {
   },
   navigation: [
     { label: "How it works", href: "#how-it-works" },
-    { label: "Agent limits", href: "#agent-limits" },
-    { label: "Build status", href: "#build-status" },
-    { label: "Developers", href: "#developers" },
+    { label: "Assistant permissions", href: "#agent-limits" },
+    { label: "Progress", href: "#build-status" },
+    { label: "About Riventa", href: "#developers" },
     { label: "Get started", href: "/workspace" },
   ],
   hero: {
-    eyebrow: "TRADE OPERATIONS · NEAR",
+    eyebrow: "CROSS BORDER TRADE OPERATIONS · NEAR",
     title: "Confidence for buyers. Certainty for suppliers.",
     description:
       "Agree on trade terms, verify delivery independently, and manage payments through a transparent process designed to give buyers confidence and suppliers greater payment certainty. Every action remains within the agreed terms.",
     primaryAction: "Watch the demo",
-    secondaryAction: "View the code",
-    visualLabel: "DOCUMENT RECORD",
+    secondaryAction: "Explore the project",
+    visualLabel: "DOCUMENT VERIFICATION",
     visualNote:
-      "A document fingerprint is recorded on NEAR. The document contents are not.",
+      "A document check is recorded on NEAR. The private document itself stays private.",
     authenticityNote:
-      "A fingerprint helps verify document integrity. It does not prove authenticity.",
+      "This record helps show whether a document has changed. It does not prove that the document is genuine.",
     visualAccessibleLabel:
-      "Illustrative commercial invoice with its contents redacted and a 32-byte fingerprint recorded on NEAR.",
+      "Illustrative commercial invoice with private details hidden and a verification record saved on NEAR.",
     recordStatus: "ON NEAR",
-    fingerprintLabel: "ILLUSTRATIVE 32-BYTE FINGERPRINT",
+    fingerprintLabel: "ILLUSTRATIVE DOCUMENT CHECK",
     fingerprintValue:
-      "8f2a71c4d90e3b6a5c1f8e2d4a7b9c0e1d3f5a6b8c2e4d7f9a0b1c3e5d6f7a8b",
+      "RVT-DOC-001-VERIFIED-2026",
     sequenceLabel: "Trade settlement conditions",
     sequence: [
       "Payment held",
@@ -65,22 +65,22 @@ export const siteContent = {
     eyebrow: "THE TRADE CONDITION",
     title: "Payment and verification belong to the same process.",
     description:
-      "A trade has more than a payment. The supplier must accept the terms, documents must be recorded, and an independent inspector must report the goods passed before a payout can be authorized.",
+      "A trade involves more than payment. The supplier must accept the terms, required documents must be checked, and an independent inspector must confirm the goods passed before payment is released.",
     points: [
       {
         title: "Supplier documents",
         description:
-          "Required document fingerprints are recorded against the trade.",
+          "Document checks help confirm that required files have not been changed.",
       },
       {
         title: "Independent inspection",
         description:
-          "A registered inspector records whether the goods passed or failed.",
+          "An independent inspector records whether the goods passed or failed.",
       },
       {
         title: "Conditional settlement",
         description:
-          "Escrow settlement follows the trade's authorized outcome.",
+          "Payment is released or returned according to the agreed trade outcome.",
       },
     ],
   },
@@ -88,124 +88,124 @@ export const siteContent = {
     eyebrow: "THE TRADE LIFECYCLE",
     title: "From agreement to settlement.",
     description:
-      "Each trade follows an explicit sequence recorded by the NEAR smart contract.",
+      "Each trade follows clear steps, with the agreed rules securely recorded on NEAR.",
     steps: [
       {
         title: "Buyer creates a trade",
         description:
-          "The buyer defines the supplier, payment token, amount and trade terms.",
+          "The buyer sets the supplier, payment amount and agreed trade terms.",
         actor: "Buyer",
         contractCheck:
-          "The trade terms, parties and required parameters are validated.",
+          "The agreed terms and the people involved are checked before the trade begins.",
       },
       {
         title: "Supplier accepts",
         description: "The supplier accepts the trade.",
         actor: "Supplier",
         contractCheck:
-          "The contract verifies the supplier is the party named in the trade.",
+          "The supplier is checked against the name agreed by the buyer.",
       },
       {
-        title: "Buyer funds escrow",
+        title: "Buyer protects the payment",
         description:
-          "The buyer funds escrow using a NEP-141 fungible token.",
+          "The buyer places the agreed payment in a protected holding account.",
         actor: "Buyer",
         contractCheck:
-          "The contract records the funded amount as the trade's escrow liability.",
+          "The payment amount is recorded and held until the agreed conditions are met.",
       },
       {
         title: "Supplier records documents",
         description:
-          "The required document fingerprints are committed on-chain.",
+          "The supplier submits the required trade documents and a verification record is saved.",
         actor: "Supplier",
         contractCheck:
-          "The contract associates the 32-byte commitments with the trade.",
+          "The verification records are linked to the correct trade.",
       },
       {
         title: "Inspector records a result",
         description:
-          "The buyer assigns a registered inspector, who records pass or fail.",
+          "The buyer appoints an approved inspector, who records whether the goods pass or fail.",
         actor: "Registered inspector",
         contractCheck:
-          "The contract verifies the inspector is registered and assigned to the trade.",
+          "The inspector is checked to ensure they are approved for this trade.",
       },
       {
         title: "Settlement is authorized",
         description:
           "A permitted payout or refund is authorized according to the trade outcome.",
-        actor: "Buyer or authorized agent",
+        actor: "Buyer or approved assistant",
         contractCheck:
-          "The contract validates the permitted outcome and settlement authority.",
+          "The requested payment or refund is checked against the agreed trade conditions.",
       },
       {
         title: "Payout or refund is sent",
         description:
-          "Anyone can trigger the authorized token transfer. A failed transfer can be retried.",
+          "The approved payment or refund can then be sent. If a transfer fails, it can be tried again.",
         actor: "Any account",
         contractCheck:
-          "The contract tracks the outstanding liability until the transfer succeeds.",
+          "The payment remains recorded until the transfer is successful.",
       },
     ],
   },
   mandates: {
-    eyebrow: "BUYER-CONTROLLED AUTHORITY",
-    title: "An agent can act. It cannot set its own limits.",
+    eyebrow: "BUYER-CONTROLLED PERMISSIONS",
+    title: "An assistant can act. The buyer sets its limits.",
     description:
-      "The buyer creates a mandate that defines exactly which actions an agent may take. The contract enforces those limits.",
+      "The buyer sets clear permissions and spending limits for an assistant. Riventa checks that every proposed action stays within those limits.",
     limits: [
       {
         label: "Approved supplier",
-        detail: "The supplier the agent is allowed to trade with.",
+        detail: "The supplier the assistant is allowed to trade with.",
       },
       {
-        label: "Per-trade cap",
+        label: "Maximum per trade",
         detail: "The maximum amount for an individual trade.",
       },
       {
         label: "Total budget",
-        detail: "The aggregate budget available to the mandate.",
+        detail: "The total amount available for approved trades.",
       },
       {
         label: "Expiry",
-        detail: "When the mandate stops being valid.",
+        detail: "When the assistant’s permission expires.",
       },
       {
         label: "Permitted outcomes",
-        detail: "Whether the agent may authorize release, refund or both.",
+        detail: "Whether the assistant may approve payment, a refund or both.",
       },
     ],
-    protectionTitle: "What the contract enforces",
+    protectionTitle: "How the buyer stays in control",
     protections: [
-      "The agent uses its own account.",
-      "The agent cannot move the buyer's escrowed funds.",
-      "The contract enforces the mandate budget and permissions.",
-      "Revocation blocks new agent actions.",
-      "Trades already funded keep the rules they started with.",
+      "The assistant acts through its own account.",
+      "The assistant cannot move the buyer's protected funds on its own.",
+      "Spending limits and permissions are checked before an action is allowed.",
+      "The buyer can withdraw permission and stop new actions.",
+      "Trades that are already funded keep the rules agreed at the start.",
     ],
   },
   privacy: {
-    eyebrow: "DOCUMENT PROVENANCE",
-    title: "The document stays off-chain. Its fingerprint is recorded.",
+    eyebrow: "DOCUMENT CONFIDENCE",
+    title: "Private documents stay private. Their verification records are saved.",
     description:
-      "Riventa records a 32-byte cryptographic fingerprint of each supplier document on NEAR. It does not record the document contents.",
+      "Riventa saves a unique verification record for each supplier document on NEAR, without putting the document itself on the public record.",
     recordedTitle: "Recorded on NEAR",
     recordedItems: [
-      "32-byte document fingerprint",
-      "Document commitment associated with the trade",
+      "A unique record showing that the document was checked",
+      "A link between the record and its trade",
     ],
-    notRecordedTitle: "Not recorded on-chain",
+    notRecordedTitle: "Kept private",
     notRecordedItems: [
       "Document contents",
       "The original invoice or shipping file",
     ],
     qualification:
-      "A matching fingerprint can show that a document has not changed. It cannot establish that the document is genuine.",
+      "A matching record can help show that a document has not changed. It cannot prove that the document is genuine.",
   },
   safeguards: {
     eyebrow: "DEADLINES AND RECOVERY",
-    title: "The contract defines when the next action is due.",
+    title: "Clear deadlines keep every trade moving.",
     description:
-      "If a required deadline is missed, the buyer can take a refund under the contract's timeout rules.",
+      "If an agreed deadline is missed, the buyer can request a refund under the trade rules.",
     deadlines: [
       {
         period: "7 days",
@@ -222,70 +222,70 @@ export const siteContent = {
     ],
     settlementTitle: "Settlement does not disappear when a transfer fails.",
     settlementDescription:
-      "Once a payout or refund is authorized, anyone can trigger it. If the token transfer fails, the contract retains the liability and allows a retry.",
+      "Once a payment or refund is approved, it can be sent. If the transfer fails, the funds remain accounted for and the transfer can be retried.",
     controls: [
-      "Administrative actions require approval from 2 of 3 administrators.",
-      "The contract has no upgrade method.",
+      "Important administrative actions require approval from at least two of three administrators.",
+      "The trade rules cannot be quietly changed after deployment.",
     ],
   },
   status: {
-    eyebrow: "CURRENT IMPLEMENTATION",
-    title: "What is built. What is planned.",
+    eyebrow: "CURRENT PROGRESS",
+    title: "What is built. What is under development.",
     description:
-      "The contract has been tested locally in a NEAR sandbox. The test token has no monetary value.",
+      "Riventa has been tested in a NEAR sandbox using a demo stablecoin. This is not real USDC and has no monetary value.",
     builtHeading: "Built",
-    plannedHeading: "Planned",
-    plannedLabel: "Planned",
+    plannedHeading: "Under development",
+    plannedLabel: "Under development",
     note:
-      "The contract has been tested locally in a NEAR sandbox. It has not been presented as a production deployment. The test token has no monetary value.",
+      "Riventa has been tested in a NEAR sandbox. This is a prototype, not a live production service. It uses a demo stablecoin, not real USDC or funds with monetary value.",
     built: [
-      "Rust smart contract on NEAR",
-      "99 automated tests in a local NEAR sandbox",
+      "NEAR smart contract for managing trade agreements and protected payments",
+      "99 automated checks in a NEAR test environment",
       "Buyer creates trades, supplier accepts, buyer funds escrow",
-      "NEP-141 token escrow",
-      "Buyer-controlled agent mandates and contract-enforced budgets",
-      "On-chain document fingerprints",
-      "Registered inspector pass/fail attestation",
-      "Deadline-based refund paths",
-      "Retryable settlement after transfer failure",
-      "2-of-3 administrator approvals",
-      "No contract upgrade method",
+      "Protected holding of digital payments until trade conditions are met",
+      "Buyer-controlled assistant permissions and spending limits",
+      "Document verification records saved on NEAR",
+      "Independent inspector records whether goods pass or fail",
+      "Refunds when agreed deadlines are missed",
+      "Ability to retry a payment if a transfer fails",
+      "Important changes require approval from two of three administrators",
+      "Trade rules designed to remain consistent after launch",
     ],
     planned: [
-      "Private encrypted document storage",
-      "Document text extraction",
-      "AI-written explanations of document inconsistencies (advisory only; AI does not authorize money)",
-      "Agent worker",
-      "Web application",
-      "Wallet login",
+      "Secure private storage for trade documents",
+      "Automatic reading of key details from trade documents",
+      "AI-assisted explanations of possible document inconsistencies",
+      "Automated assistance for trade workflows",
+      "A complete online workspace for buyers and suppliers",
+      "Simpler account connection and sign-in",
       "Dispute resolution",
-      "Cross-chain funding through NEAR Intents",
-      "Production deployment",
+      "Support for stablecoins such as USDC in live payment environments",
+      "Public launch",
     ],
   },
   developers: {
-    eyebrow: "FOR BUILDERS",
-    title: "A Rust contract with testable trade rules.",
+    eyebrow: "BUILT AROUND TRADE",
+    title: "A clearer way to manage trade commitments.",
     description:
-      "Riventa is built on NEAR with a Rust smart contract. Its local test suite covers the trade lifecycle, mandate enforcement, document commitments, inspection and settlement paths.",
+      "Riventa brings buyers, suppliers and independent inspectors into one process. Agreed terms, protected payments, document checks and clear decisions work together so everyone knows what must happen next.",
     facts: [
-      { label: "Smart contract", value: "Rust · NEAR" },
-      { label: "Token standard", value: "NEP-141" },
-      { label: "Automated tests", value: "99 · local sandbox" },
-      { label: "Document record", value: "32-byte fingerprint" },
+      { label: "For buyers", value: "Greater payment confidence" },
+      { label: "For suppliers", value: "Clearer payment conditions" },
+      { label: "For inspectors", value: "A defined role in verification" },
+      { label: "Trade records", value: "Important decisions recorded on NEAR" },
     ],
-    action: "View the code",
+    action: "Get started",
   },
   closing: {
     title: "Payment follows the trade conditions.",
     description:
-      "See how escrow, document commitments, inspection and buyer-defined agent limits work together.",
+      "See how protected payments, document checks, independent inspections and buyer-defined permissions work together.",
     primaryAction: "Watch the demo",
-    secondaryAction: "View the code",
+    secondaryAction: "Explore the project",
   },
   footer: {
     note: "Confidential trade operations and conditional settlement.",
     disclaimer:
-      "Prototype tested locally with a test token that has no monetary value.",
+      "Prototype tested in a NEAR sandbox using a demo stablecoin, not real USDC or funds with monetary value.",
   },
 } as const;

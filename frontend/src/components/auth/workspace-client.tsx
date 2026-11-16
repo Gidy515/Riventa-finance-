@@ -76,6 +76,50 @@ function describeError(error: unknown): string {
   return error.message;
 }
 
+const USDC_DECIMALS = 6;
+const USDC_SCALE = BigInt(10) ** BigInt(USDC_DECIMALS);
+const U128_MAX = (BigInt(1) << BigInt(128)) - BigInt(1);
+
+function parseUsdcAmountToRaw(value: string): string {
+  const normalized = value.trim();
+
+  if (!/^\d+(?:\.\d{1,6})?$/.test(normalized)) {
+    throw new Error(
+      "Enter a valid USDC amount with no more than 6 decimal places."
+    );
+  }
+
+  const [whole, fraction = ""] = normalized.split(".");
+  const raw =
+    BigInt(whole) * USDC_SCALE +
+    BigInt(fraction.padEnd(USDC_DECIMALS, "0") || "0");
+
+  if (raw <= BigInt(0)) {
+    throw new Error("The trade amount must be greater than zero.");
+  }
+
+  if (raw > U128_MAX) {
+    throw new Error("The trade amount exceeds the supported maximum.");
+  }
+
+  return raw.toString();
+}
+
+function formatRawUsdcAmount(value: string): string {
+  if (!/^\d+$/.test(value)) return "Invalid amount";
+
+  const raw = BigInt(value);
+  const whole = (raw / USDC_SCALE).toString();
+  const fraction = (raw % USDC_SCALE)
+    .toString()
+    .padStart(USDC_DECIMALS, "0")
+    .replace(/0+$/, "");
+
+  const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  return fraction ? `${groupedWhole}.${fraction}` : groupedWhole;
+}
+
 function formatTradeDate(value: string): string {
   try {
     const milliseconds = Number(BigInt(value) / BigInt(1_000_000));
@@ -100,7 +144,6 @@ function formatStatus(value: string): string {
 }
 
 const SDD_TOKEN_CONTRACT = "sdd.gidy515.testnet";
-const REQUIRED_FUNDING_AMOUNT = "10000000000";
 const CONTRACT_GAS = "50000000000000";
 const ACCEPT_GAS = "30000000000000";
 const FT_TRANSFER_GAS = "100000000000000";
@@ -169,6 +212,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
     null
   );
   const [supplierAccount, setSupplierAccount] = useState("");
+  const [tradeAmount, setTradeAmount] = useState("10000");
   const [resolverAccount, setResolverAccount] = useState("");
   const [inspectionTerms, setInspectionTerms] = useState("");
   const [refundTerms, setRefundTerms] = useState("");
@@ -541,6 +585,8 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         throw new Error("Complete all trade proposal fields.");
       }
 
+      const amountRaw = parseUsdcAmountToRaw(tradeAmount);
+
       const commitments = await Promise.all([
         hashCommitment(inspectionTerms),
         hashCommitment(refundTerms),
@@ -553,6 +599,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         {
           supplier: supplierAccount.trim(),
           proposed_resolver: resolverAccount.trim(),
+          amount: amountRaw,
           inspection_criteria_commitment: commitments[0],
           refund_terms_commitment: commitments[1],
           agreement_commitment: commitments[2],
@@ -570,6 +617,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
       );
 
       setSupplierAccount("");
+      setTradeAmount("10000");
       setResolverAccount("");
       setInspectionTerms("");
       setRefundTerms("");
@@ -628,12 +676,32 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
         throw new Error("The Riventa contract account is not configured.");
       }
 
+      const trade = tradePage?.items.find(
+        (item) => item.tradeId === tradeId
+      );
+
+      if (!trade) {
+        throw new Error(
+          "Trade details are unavailable. Refresh trade activity and try again."
+        );
+      }
+
+      if (!/^\d+$/.test(trade.amountRaw)) {
+        throw new Error("The recorded trade amount is invalid.");
+      }
+
+      const fundingAmount = BigInt(trade.amountRaw);
+
+      if (fundingAmount <= BigInt(0) || fundingAmount > U128_MAX) {
+        throw new Error("The recorded trade amount is outside the supported range.");
+      }
+
       await submitWalletCall(
         SDD_TOKEN_CONTRACT,
         "ft_transfer_call",
         {
           receiver_id: contractId,
-          amount: REQUIRED_FUNDING_AMOUNT,
+          amount: trade.amountRaw,
           msg: JSON.stringify({ trade_id: toNearU64(tradeId) }),
         },
         FT_TRANSFER_GAS,
@@ -953,10 +1021,24 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
           <p>
             Create a trade proposal by entering the supplier, independent reviewer
             and agreed terms. The original agreement and supporting documents
-            remain private. The funding amount for this demo is 10,000 SDD.
+            remain private. Set the agreed funding amount below. Amounts are
+            displayed as USDC, with up to 6 decimal places.
           </p>
 
           <form className="workspace-trade-form" onSubmit={handleCreateTrade}>
+            <label>
+              TRADE AMOUNT (USDC)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={tradeAmount}
+                onChange={(event) => setTradeAmount(event.target.value)}
+                placeholder="10000.00"
+                required
+                disabled={busy}
+              />
+            </label>
+
             <label>
               SUPPLIER ACCOUNT
               <input
@@ -1193,7 +1275,7 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                         With {counterparty}
                       </span>
                       <span className="workspace-trade-card-meta">
-                        <span>{trade.amountRaw} raw units</span>
+                        <span>{formatRawUsdcAmount(trade.amountRaw)} USDC</span>
                         <span>{formatTradeDate(trade.createdAtNs)}</span>
                       </span>
                     </button>
@@ -1238,8 +1320,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                       <strong>{selectedTrade.resolverAccount}</strong>
                     </div>
                     <div>
-                      <span>TRADE AMOUNT (RAW TOKEN UNITS)</span>
-                      <strong>{selectedTrade.amountRaw}</strong>
+                      <span>TRADE AMOUNT</span>
+                      <strong>{formatRawUsdcAmount(selectedTrade.amountRaw)} USDC</strong>
+                      <span>{selectedTrade.amountRaw} raw units</span>
                     </div>
                     <div>
                       <span>PAYMENT TOKEN</span>
@@ -1279,7 +1362,9 @@ export function WorkspaceClient({ page = "overview" }: { page?: "overview" | "ac
                         onClick={() => handleFundTrade(selectedTrade.tradeId)}
                         disabled={busy || !walletConnected}
                       >
-                        {busy ? "Processing..." : "Fund trade · 10,000 SDD"}
+                        {busy
+                          ? "Processing..."
+                          : `Fund trade · ${formatRawUsdcAmount(selectedTrade.amountRaw)} USDC`}
                       </button>
                     )}
                 </section>
