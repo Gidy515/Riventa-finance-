@@ -3382,7 +3382,17 @@ main > section.section:nth-of-type(even) {
 
   .hero-sequence {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hero-sequence span {
+    flex: 1 1 0;
+    justify-content: center;
+    white-space: nowrap;
+    padding-inline: 8px;
+    font-size: 9px;
   }
 
   .problem-grid {

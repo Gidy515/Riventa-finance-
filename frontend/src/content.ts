@@ -59,6 +59,7 @@ export const siteContent = {
       "Payment held",
       "Documents recorded",
       "Inspection passed",
+      "Payment released",
     ],
   },
   problem: {
