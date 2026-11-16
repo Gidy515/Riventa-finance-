@@ -26,6 +26,7 @@ interface Props {
   parentBusy: boolean;
   onWalletCall: WalletCall;
   onTokenWalletCall: WalletCall;
+  onSuccess: (message: string) => void;
 }
 
 const CONTRACT_GAS = "50000000000000";
@@ -66,12 +67,12 @@ export function TradeLifecyclePanel({
   parentBusy,
   onWalletCall,
   onTokenWalletCall,
+  onSuccess,
 }: Props) {
   const [lifecycle, setLifecycle] = useState<TradeLifecycle | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const [documentType, setDocumentType] =
     useState<DocumentType>("commercial_invoice");
@@ -114,13 +115,22 @@ export function TradeLifecyclePanel({
   ) {
     setBusy(true);
     setError(null);
-    setMessage(null);
 
     try {
       await onWalletCall(methodName, args, gas, "0");
-      setMessage(
-        "Your request was submitted. Refresh the trade to check its latest status."
-      );
+      const successMessages: Record<string, string> = {
+        record_document_commitment: "Document recorded successfully.",
+        submit_inspection_attestation: "Inspection result submitted successfully.",
+        assign_inspector: "Independent inspector assigned successfully.",
+        replace_inspector: "Independent inspector replaced successfully.",
+        authorize_mandated_release: "Payment authorization recorded successfully.",
+        confirm_release: "Supplier payment approved successfully.",
+        authorize_mandated_refund: "Refund authorization recorded successfully.",
+        choose_refund: "Buyer refund approved successfully.",
+        release_payment: "Supplier payment completed successfully.",
+        refund_escrow: "Refund completed successfully.",
+      };
+      onSuccess(successMessages[methodName] ?? "Trade update completed successfully.");
       await refreshLifecycle();
       return true;
     } catch (caught) {
@@ -138,7 +148,6 @@ export function TradeLifecyclePanel({
   async function registerSupplierTokenStorage() {
     setBusy(true);
     setError(null);
-    setMessage(null);
 
     try {
       await onTokenWalletCall(
@@ -151,9 +160,7 @@ export function TradeLifecyclePanel({
         "1250000000000000000000"
       );
 
-      setMessage(
-        "The supplier payment account setup was submitted. Refresh the trade before retrying payment."
-      );
+      onSuccess("Supplier payment account setup completed successfully.");
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -287,12 +294,6 @@ export function TradeLifecyclePanel({
           {error}
         </p>
       )}
-      {message && (
-        <p className="workspace-form-hint" role="status">
-          {message}
-        </p>
-      )}
-
       {loading && !lifecycle && <p>Loading trade details...</p>}
 
       {lifecycle && (
