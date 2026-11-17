@@ -4,20 +4,24 @@
 
 Riventa is an AI-assisted trade-operations platform designed to coordinate cross-border business transactions through buyer-authorized automation, verifiable document commitments, independent inspection, and smart-contract-enforced escrow.
 
-The system is designed around a clear separation of authority:
+The system is built around a clear separation of authority:
 
-- Buyers define the limits under which an authorized agent may act.
-- Suppliers accept trade terms and submit required documents.
+- Buyers define trade terms and the limits under which an authorized agent may act.
+- Suppliers accept trade terms and submit required document commitments.
 - Independent inspectors attest to inspection outcomes.
-- The NEAR smart contract enforces trade state, mandate permissions, budget accounting, and escrow settlement.
-- Backend services process private documents and coordinate permitted operations without controlling customer funds.
+- The NEAR smart contract enforces trade state, mandate permissions, budget accounting, escrow liabilities, and settlement.
+- Backend services authenticate participants, index blockchain state, and coordinate application workflows without controlling customer funds.
 - AI assists with document analysis; it does not authorize financial actions.
 
 ## Project status
 
-**Current contract milestone:** `f6f630f` — `feat: add timeout-based escrow recovery`
+Riventa has progressed beyond a contract-only prototype. The repository contains a working NEAR smart contract, a Next.js frontend, and a Fastify/PostgreSQL backend with wallet-signature authentication, workspace APIs, and a NEAR indexing pipeline.
 
-The Rust/NEAR contract currently implements:
+This is an MVP/hackathon implementation, not a production trade-finance deployment. The sections below distinguish implemented functionality from remaining work.
+
+### Implemented MVP
+
+**Smart contract**
 
 - Three-administrator configuration with 2-of-3 administrative approval.
 - Buyer-created trades and supplier acceptance.
@@ -33,37 +37,65 @@ The Rust/NEAR contract currently implements:
 - Buyer-only timeout-based escrow recovery with distinct settlement reasons.
 - Buyer- or mandate-authorized payout/refund authorization.
 - NEP-141 payout and refund transfers with asynchronous callbacks.
-- Failed settlement recovery through retryable authorization and settlement records.
+- Failed-settlement recovery through retryable authorization and settlement records.
+
+**Backend**
+
+- Fastify API server with environment-based configuration and CORS allowlisting.
+- PostgreSQL connection pool and versioned SQL migrations.
+- NEAR wallet-signature challenge and verification endpoints.
+- Session management, including session lookup and logout.
+- HttpOnly session-cookie handling and authenticated route guards.
+- Authenticated workspace status, trade list/detail/lifecycle, and mandate read APIs.
+- NEAR RPC reads for finalized contract state.
+- NEAR event indexing with persisted checkpoints and database projections.
+- Graceful server and indexer shutdown.
+- Backend tests covering domain, NEAR integration, and workspace behavior.
+
+**Frontend**
+
+- Next.js App Router application and public product website.
+- NEAR wallet connection integration.
+- Authenticated workspace entry.
+- Participant-facing trade workflows.
+- Trade creation and activity interfaces.
+- Trade lifecycle presentation.
+- Supplier acceptance and funding workflows.
+- Document commitment and inspector assignment interfaces.
+- Inspection status and settlement authorization interfaces where supported by the connected contract.
+
+The frontend and backend are functional MVP components. Their existence does not mean every planned automation, document-intelligence, dispute, or production operations feature is complete.
 
 ### Verification
 
-The workspace passed the following checks on 9 November 2026:
+The contract workspace passed the following checks on 9 November 2026:
 
-| Check                                    |        Result |
-| ---------------------------------------- | ------------: |
-| Contract unit tests                      |     95 passed |
-| Funding and settlement integration tests |      3 passed |
-| NEAR sandbox smoke tests                 |      1 passed |
-| Rust formatting check                    |        Passed |
-| WASM-target workspace check              |        Passed |
-| `git diff --check`                       |        Passed |
-| **Total tests**                          | **99 passed** |
+| Check | Result |
+|---|---:|
+| Contract unit tests | 95 passed |
+| Funding and settlement integration tests | 3 passed |
+| NEAR sandbox smoke tests | 1 passed |
+| Rust formatting check | Passed |
+| WASM-target workspace check | Passed |
+| `git diff --check` | Passed |
+| **Total contract tests** | **99 passed** |
 
-Run the commands in [Development](#development) to reproduce the checks.
+This is a dated historical verification snapshot. The 99 tests verify the contract workspace, not the entire frontend and backend application.
 
-### Not yet implemented
+Run the relevant commands in [Development](#development) to verify the current checkout.
 
-The following remain outside the verified implementation milestone:
+### Not yet implemented or not production-verified
 
 - Complete dispute opening, resolver decisions, and resolver replacement.
-- Production backend API and agent-worker orchestration.
-- Production frontend workflows.
-- Wallet authentication and embedded-wallet integration.
-- Private document storage, OCR, and AI document intelligence.
-- Production deployment and operational monitoring.
+- Autonomous agent-worker execution and production-grade orchestration of mandate-authorized actions.
+- Private document object storage, OCR, cross-document analysis, and AI document intelligence.
 - Live cross-chain settlement through NEAR Intents or Tidepool.
+- Full embedded-wallet and cross-chain signing compatibility, including any required Chain Signatures integration.
+- Production KYB/business identity verification and compliance integrations.
+- Production deployment, independent security audits, operational key management, monitoring, alerting, backups, and incident/recovery procedures.
+- Load testing, service-level objectives, and production-scale indexing/reconciliation.
 
-The architecture and requirements for these capabilities are documented, but they must not be confused with implemented or production-verified functionality.
+These remain roadmap items. Documentation or interface elements describing a capability do not establish that the capability is implemented.
 
 ---
 
@@ -77,11 +109,12 @@ The architecture and requirements for these capabilities are documented, but the
 - [Smart-contract interface](#smart-contract-interface)
 - [Escrow and settlement](#escrow-and-settlement)
 - [Document commitments and inspection](#document-commitments-and-inspection)
+- [Backend and frontend](#backend-and-frontend)
 - [Security model](#security-model)
 - [Cross-chain direction](#cross-chain-direction)
 - [Repository structure](#repository-structure)
 - [Development](#development)
-- [Documentation](#documentation)
+- [Post-MVP roadmap](#post-mvp-roadmap)
 - [Limitations and non-goals](#limitations-and-non-goals)
 
 ## Problem and approach
@@ -92,20 +125,20 @@ Traditional workflows often rely on disconnected communication channels, manual 
 
 Riventa approaches this problem through programmable trade operations:
 
-1. A buyer defines a trade and, where applicable, delegates bounded execution authority to an agent.
+1. A buyer creates a trade directly or delegates bounded creation authority through a mandate.
 2. The supplier accepts the trade.
 3. The buyer funds the contract through an allowlisted NEP-141 token.
 4. Required supplier documents are committed to the trade.
 5. An assigned inspector submits a final inspection attestation.
-6. The buyer or an authorized agent establishes the permitted settlement outcome.
-7. Anyone may trigger an already-authorized payout or refund.
+6. The buyer or an agent permitted by the trade's mandate snapshot authorizes the applicable payout or refund.
+7. Anyone may trigger an already-authorized transfer.
 8. The contract records the asynchronous token-transfer result.
 
-The smart contract enforces the financial and authorization rules. Off-chain services are intended to handle document processing, AI-assisted analysis, workflow orchestration, and read-model projections.
+The smart contract enforces financial and authorization rules. The frontend provides participant workflows. The backend authenticates users, indexes finalized blockchain data, and serves application projections. Advanced private-document processing and AI analysis remain planned.
 
 ## System architecture
 
-Riventa separates authoritative on-chain state from off-chain processing.
+Riventa separates authoritative on-chain state from off-chain application services.
 
 ```mermaid
 flowchart TB
@@ -116,16 +149,20 @@ flowchart TB
         Agent["Authorized agent"]
     end
 
-    subgraph Application["Application layer — planned"]
+    subgraph App["Implemented MVP application"]
         Frontend["Next.js frontend"]
         API["Fastify API"]
-        Worker["Agent and document worker"]
         DB[("PostgreSQL")]
-        Storage[("Private encrypted file storage")]
-        AI["Ollama local inference"]
+        Indexer["NEAR event indexer"]
     end
 
-    subgraph NEAR["NEAR network"]
+    subgraph Planned["Post-MVP services"]
+        Worker["Agent orchestration worker"]
+        Storage[("Private document storage")]
+        AI["OCR and AI document analysis"]
+    end
+
+    subgraph Chain["NEAR network"]
         Contract["Riventa trade-operations contract"]
         Token["Allowlisted NEP-141 token"]
         RPC["NEAR RPC"]
@@ -134,37 +171,34 @@ flowchart TB
     Buyer --> Frontend
     Supplier --> Frontend
     Inspector --> Frontend
-    Agent --> Worker
-
+    Agent --> Frontend
     Frontend --> API
     Frontend --> RPC
     API --> DB
-    API --> Storage
-    API --> Worker
-    Worker --> AI
-    Worker --> RPC
-
+    API --> RPC
+    Indexer --> RPC
+    Indexer --> DB
+    API -. "Future integration" .-> Worker
+    Worker -.-> Storage
+    Worker -.-> AI
     RPC --> Contract
     Contract <--> Token
-
-    API -. "Read and reconcile" .-> RPC
-    Contract -. "Authoritative state" .-> RPC
 ```
 
-**Authority boundaries**
+### Authority boundaries
 
-| Component       | Responsibility                                                                               | Authority                              |
-| --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
-| NEAR contract   | Mandates, trade state, budget accounting, escrow liabilities, inspection records, settlement | Authoritative                          |
-| NEP-141 token   | Token balances and transfers                                                                 | Token ledger                           |
-| Frontend        | Participant workflows and transaction preparation                                            | Non-authoritative                      |
-| Backend/API     | Authentication, document processing, orchestration, indexing                                 | Non-authoritative                      |
-| Agent worker    | Executes operations permitted by a mandate                                                   | Limited to contract-enforced authority |
-| PostgreSQL      | Metadata, jobs, logs, and indexed projections                                                | Rebuildable                            |
-| Private storage | Encrypted document objects and associated private data                                       | Off-chain evidence storage             |
-| AI inference    | Explains structured document findings                                                        | Advisory only                          |
+| Component | Responsibility | Authority |
+|---|---|---|
+| NEAR contract | Mandates, trade state, budget accounting, escrow liabilities, inspection records, settlement | Authoritative |
+| NEP-141 token | Token balances and transfers | Token ledger |
+| Frontend | Participant workflows and transaction preparation | Non-authoritative |
+| Backend/API | Wallet authentication, workspace APIs, indexing, projections | Non-authoritative |
+| PostgreSQL | Sessions, application metadata, indexer checkpoints, projections | Rebuildable; not escrow authority |
+| Agent execution | Future orchestration of permitted actions | Must remain contract-constrained |
+| Private storage | Future encrypted document objects | Off-chain evidence storage |
+| AI inference | Future document findings and explanations | Advisory only |
 
-The backend, database, AI service, and frontend cannot independently authorize escrow transfers.
+The backend, database, frontend, and AI service cannot independently authorize escrow transfers.
 
 ## Trade lifecycle
 
@@ -180,9 +214,9 @@ flowchart TD
     F --> G["Buyer assigns registered inspector"]
     G --> H["Inspector submits final attestation"]
 
-    D -->|7-day document deadline missed| X["Buyer initiates timeout refund"]
-    F -->|3-day assignment deadline missed| X
-    G -->|7-day inspection deadline missed| X
+    D -->|"7-day document deadline missed"| X["Buyer initiates timeout refund"]
+    F -->|"3-day assignment deadline missed"| X
+    G -->|"7-day inspection deadline missed"| X
 
     H --> I{"Inspection outcome"}
     I -->|Pass| J{"Mandate permits agent release?"}
@@ -201,7 +235,7 @@ flowchart TD
     P --> R["Permissionless payout trigger"]
     Q --> S["Permissionless refund trigger"]
 
-    R --> T["NEP-141 transfer + private callback"]
+    R --> T["NEP-141 transfer and private callback"]
     S --> T
 
     T --> U{"Transfer result"}
@@ -209,9 +243,7 @@ flowchart TD
     U -->|Failure| W["Restore authorization; preserve liability"]
 ```
 
-The diagram describes the normal funding, inspection, authorization, and settlement paths.
-
-The contract also supports buyer-initiated timeout recovery when supplier documents, inspector assignment, or inspection attestation miss their defined deadlines. Eligible timeout refunds enter the existing refund settlement pipeline.
+The contract also supports buyer-initiated timeout recovery when supplier documents, inspector assignment, or inspection attestation miss their defined deadlines.
 
 Dispute handling is part of the wider architecture, but its complete contract workflow is not included in the current verified implementation.
 
@@ -231,27 +263,6 @@ A mandate binds:
 - Expiry and policy version.
 
 The buyer creates, updates, renews, or revokes a mandate through buyer-authorized contract calls.
-
-### Mandate execution flow
-
-```mermaid
-flowchart TD
-    A["Buyer defines execution policy"] --> B["Buyer signs mandate transaction"]
-    B --> C["Contract stores mandate and budget"]
-    C --> D["Agent requests trade creation"]
-    D --> E{"Contract validates mandate"}
-    E -->|Rejected| X["Trade creation rejected"]
-    E -->|Accepted| F["Reserve full trade amount"]
-    F --> G["Create trade and immutable policy snapshot"]
-    G --> H["Supplier accepts"]
-    H --> I["Buyer funds trade"]
-    I --> J["Reservation becomes consumed budget"]
-    J --> K["Trade continues under its snapshot"]
-
-    C --> L["Buyer updates or revokes mandate"]
-    L -. "Future trades and applicable unfunded actions" .-> D
-    L -. "Does not rewrite funded trade snapshot" .-> K
-```
 
 ### Budget accounting
 
@@ -280,24 +291,26 @@ The agent uses its own NEAR account. It does not sign as the buyer and does not 
 
 ## Technology stack
 
-The project distinguishes the verified contract toolchain from the planned application architecture.
+The project distinguishes the implemented application stack from planned extensions.
 
-| Layer               | Technology                                       | Status         |
-| ------------------- | ------------------------------------------------ | -------------- |
-| Smart contracts     | Rust 1.99.1                                      | Implemented    |
-| NEAR SDK            | `near-sdk` 5.29.1                                | Implemented    |
-| NEAR standards      | `near-contract-standards` 5.29.1                 | Implemented    |
-| Integration testing | `near-workspaces` 0.23.0                         | Implemented    |
-| Test token          | NEP-141 SDD token contract                       | Test workspace |
-| Frontend            | Next.js 16.4.2, TypeScript 5.9.3                 | Planned        |
-| Backend             | Node.js 26.13.0, Fastify 5.6.2, TypeScript 5.9.3 | Planned        |
-| Database            | PostgreSQL 18.6                                  | Planned        |
-| Document processing | `pdfjs-dist`, Tesseract.js                       | Planned        |
-| AI inference        | Ollama with `qwen3:4b-instruct-2507-q4_K_M`      | Planned        |
-| Job processing      | PostgreSQL-backed job table                      | Planned        |
-| File storage        | Private encrypted filesystem storage             | Planned        |
+| Layer | Technology | Status |
+|---|---|---|
+| Smart contracts | Rust 1.99.1 | Implemented |
+| NEAR SDK | `near-sdk` 5.29.1 | Implemented |
+| NEAR standards | `near-contract-standards` 5.29.1 | Implemented |
+| Integration testing | `near-workspaces` 0.23.0 | Implemented |
+| Test token | NEP-141 SDD token contract | Test environment |
+| Frontend | Next.js 16.4.2, React 19.2.3, TypeScript 5.9.3 | Implemented MVP |
+| Wallet integration | `@hot-labs/near-connect` 0.12.0 | Implemented MVP |
+| Backend | Node.js, Fastify 5.6.2, TypeScript 5.9.3 | Implemented MVP |
+| Database | PostgreSQL, `pg` 8.16.3 | Implemented MVP |
+| Migrations | Versioned SQL migrations | Implemented MVP |
+| NEAR indexing | RPC/Data API indexing worker with persisted checkpoints | Implemented MVP |
+| OCR and AI | Tesseract.js / Ollama model baseline | Planned |
+| Private document storage | Encrypted object/file storage | Planned |
+| Agent worker | Mandate-constrained orchestration | Planned |
 
-The application-layer versions represent the selected architecture baseline, not evidence that the corresponding services are already implemented.
+The root package requires Node.js >=22.20.0 and uses pnpm 11.22.0.
 
 ## Smart-contract interface
 
@@ -305,63 +318,63 @@ The current contract is implemented in:
 
 `contracts/trade-operations/src/lib.rs`
 
-The principal public methods are listed below. The source code is the authority for exact parameter and return types.
+The source code is the authority for exact parameter and return types.
 
 ### Initialization and administration
 
-| Method                  | Purpose                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `new`                   | Initializes the contract with three administrators and an allowlisted token contract |
-| `propose_admin_action`  | Proposes an administrative action                                                    |
-| `approve_admin_action`  | Records an administrator's approval                                                  |
-| `execute_admin_action`  | Executes an approved administrative action                                           |
-| `expire_admin_proposal` | Removes an expired proposal                                                          |
-| `get_admin_proposal`    | Reads a proposal                                                                     |
-| `get_contract_config`   | Reads contract configuration                                                         |
+| Method | Purpose |
+|---|---|
+| `new` | Initializes the contract with three administrators and an allowlisted token contract |
+| `propose_admin_action` | Proposes an administrative action |
+| `approve_admin_action` | Records an administrator's approval |
+| `execute_admin_action` | Executes an approved administrative action |
+| `expire_admin_proposal` | Removes an expired proposal |
+| `get_admin_proposal` | Reads a proposal |
+| `get_contract_config` | Reads contract configuration |
 
 Administrative actions use a 2-of-3 approval model.
 
 ### Mandates and trade creation
 
-| Method                       | Purpose                                     |
-| ---------------------------- | ------------------------------------------- |
-| `create_mandate`             | Creates buyer-authorized agent permissions  |
-| `update_mandate`             | Updates mandate policy for future trades    |
-| `renew_mandate`              | Renews mandate validity                     |
-| `revoke_mandate`             | Revokes a mandate                           |
-| `get_mandate`                | Reads mandate state                         |
-| `get_trade_policy_snapshot`  | Reads a trade's stored policy snapshot      |
-| `create_trade`               | Creates a buyer-originated trade            |
+| Method | Purpose |
+|---|---|
+| `create_mandate` | Creates buyer-authorized agent permissions |
+| `update_mandate` | Updates mandate policy |
+| `renew_mandate` | Renews mandate validity |
+| `revoke_mandate` | Revokes a mandate |
+| `get_mandate` | Reads mandate state |
+| `get_trade_policy_snapshot` | Reads a trade's stored policy snapshot |
+| `create_trade` | Creates a buyer-originated trade |
 | `create_trade_under_mandate` | Creates a trade using an authorized mandate |
-| `accept_trade`               | Allows the named supplier to accept         |
-| `cancel_trade`               | Cancels an eligible unfunded trade          |
+| `accept_trade` | Allows the named supplier to accept |
+| `cancel_trade` | Cancels an eligible unfunded trade |
 
 ### Documents and inspection
 
-| Method                                     | Purpose                                        |
-| ------------------------------------------ | ---------------------------------------------- |
-| `record_document_commitment`               | Records a supplier document commitment         |
-| `get_document_commitments`                 | Reads document commitments                     |
-| `are_required_supplier_documents_complete` | Checks required supplier document completeness |
-| `get_inspector`                            | Reads inspector registration                   |
-| `assign_inspector`                         | Assigns an eligible registered inspector       |
-| `replace_inspector`                        | Replaces an inspector within the allowed limit |
-| `submit_inspection_attestation`            | Records the assigned inspector's final outcome |
-| `get_inspection_record`                    | Reads inspection information                   |
+| Method | Purpose |
+|---|---|
+| `record_document_commitment` | Records a supplier document commitment |
+| `get_document_commitments` | Reads document commitments |
+| `are_required_supplier_documents_complete` | Checks required-document completeness |
+| `get_inspector` | Reads inspector registration |
+| `assign_inspector` | Assigns an eligible registered inspector |
+| `replace_inspector` | Replaces an inspector within the allowed limit |
+| `submit_inspection_attestation` | Records the assigned inspector's final outcome |
+| `get_inspection_record` | Reads inspection information |
 
 ### Settlement
 
-| Method                            | Purpose                                                                           |
-| --------------------------------- | --------------------------------------------------------------------------------- |
-| `authorize_mandated_release`      | Authorizes payout under the stored mandate snapshot                               |
-| `authorize_mandated_refund`       | Authorizes refund under the stored mandate snapshot                               |
-| `confirm_release`                 | Records buyer payout confirmation                                                 |
-| `choose_refund`                   | Records buyer refund choice                                                       |
-| `refund_after_timeout`            | Allows the buyer to refund escrow after an eligible post-funding deadline expires |
-| `release_payment`                 | Triggers an authorized payout                                                     |
-| `refund_escrow`                   | Triggers an authorized refund                                                     |
-| `on_settlement_transfer_complete` | Processes the private asynchronous transfer callback                              |
-| `get_trade`                       | Reads trade state                                                                 |
+| Method | Purpose |
+|---|---|
+| `authorize_mandated_release` | Authorizes payout under the stored mandate snapshot |
+| `authorize_mandated_refund` | Authorizes refund under the stored mandate snapshot |
+| `confirm_release` | Records buyer payout confirmation |
+| `choose_refund` | Records buyer refund choice |
+| `refund_after_timeout` | Allows the buyer to refund escrow after an eligible post-funding deadline expires |
+| `release_payment` | Triggers an authorized payout |
+| `refund_escrow` | Triggers an authorized refund |
+| `on_settlement_transfer_complete` | Processes the private asynchronous transfer callback |
+| `get_trade` | Reads trade state |
 
 The token receiver `ft_on_transfer` is implemented through the NEP-141 fungible-token receiver interface.
 
@@ -384,7 +397,7 @@ The receiver validates:
 
 Rejected transfers return the full unused amount through NEP-141 transfer-call resolution. The contract does not manually refund a rejected incoming transfer.
 
-The current test configuration uses a fixed funding amount of 10,000 SDD, represented as `10,000,000,000` raw units. SDD is a sandbox/test token and does not represent real purchasing power or revenue.
+The test configuration uses a fixed funding amount of 10,000 SDD, represented as `10,000,000,000` raw units at six decimals. SDD is a sandbox/test token and does not represent real purchasing power or revenue.
 
 ### Outgoing settlement
 
@@ -406,11 +419,11 @@ The agent authorizes within its mandate; the contract itself performs the token 
 
 The contract provides a buyer-only recovery path when a required post-funding lifecycle action is not completed within its defined deadline.
 
-| Required action                           | Deadline begins                               | Allowed duration |
-| ----------------------------------------- | --------------------------------------------- | ---------------: |
-| Supplier submits all required documents   | Successful funding                            |           7 days |
-| Buyer assigns an inspector                | Completion of all required supplier documents |           3 days |
-| Assigned inspector submits an attestation | Inspector assignment or permitted replacement |           7 days |
+| Required action | Deadline begins | Allowed duration |
+|---|---|---:|
+| Supplier submits all required documents | Successful funding | 7 days |
+| Buyer assigns an inspector | Completion of all required supplier documents | 3 days |
+| Assigned inspector submits an attestation | Inspector assignment or permitted replacement | 7 days |
 
 Recovery becomes available at or after the relevant deadline. The corresponding lifecycle action is rejected once its deadline has passed.
 
@@ -426,7 +439,7 @@ Timeout refunds:
 
 The inspector assignment deadline starts only after all required documents are complete. A permitted inspector replacement resets the inspection-attestation deadline. Only one replacement is permitted by the existing contract policy.
 
-These recovery rules do not constitute dispute resolution or arbitration. The complete resolver workflow remains unimplemented.
+These recovery rules do not constitute dispute resolution or arbitration.
 
 ## Document commitments and inspection
 
@@ -445,7 +458,64 @@ The implemented workflow includes:
 
 Document commitments provide a cryptographic reference to off-chain material. They do **not** independently prove that a document is authentic, legally valid, or factually correct.
 
-The planned backend will manage private document storage, encryption, extraction, deterministic comparisons, and AI-assisted explanations. Those capabilities are not yet part of the verified contract milestone.
+The planned document-intelligence layer will manage private document storage, encryption, extraction, deterministic comparisons, and AI-assisted explanations. Those capabilities are not yet part of the verified implementation.
+
+## Backend and frontend
+
+### Backend
+
+The Fastify service is located in `backend/`.
+
+Its implemented MVP responsibilities include:
+
+- Wallet challenge and signature-verification authentication.
+- Session management and logout.
+- PostgreSQL persistence and SQL migrations.
+- Authenticated workspace and trade/mandate read endpoints.
+- Reading finalized NEAR contract state through RPC.
+- Indexing finalized NEAR blocks/events and persisting checkpoints and projections.
+- Health checks and graceful shutdown.
+
+The indexer and database provide application read models. The NEAR contract remains authoritative.
+
+The backend does not custody user keys or independently authorize contract transfers.
+
+### Frontend
+
+The Next.js application is located in `frontend/`.
+
+It provides:
+
+- Public product and marketing pages.
+- NEAR wallet connection.
+- Authenticated workspace experience.
+- Participant-facing trade workflows.
+- Trade creation and activity interfaces.
+- Trade lifecycle presentation.
+- Supplier acceptance and funding workflows.
+- Document commitment and inspector assignment interfaces.
+- Inspection status and settlement authorization interfaces where supported by the connected contract.
+
+Financial actions still require the appropriate signed NEAR transaction and contract-side authorization.
+
+### API routes
+
+The implemented route families include:
+
+| Route | Purpose |
+|---|---|
+| `POST /auth/challenge` | Starts wallet login challenge |
+| `POST /auth/verify` | Verifies wallet signature and establishes session |
+| `GET /auth/me` | Returns the current authenticated session |
+| `POST /auth/logout` | Ends the session |
+| `GET /workspace/status` | Workspace, contract, and indexer status |
+| `GET /workspace/trades` | Lists visible trades |
+| `GET /workspace/trades/:tradeId` | Reads a trade |
+| `GET /workspace/trades/:tradeId/lifecycle` | Reads documents, inspection, settlement projection, and policy snapshot |
+| `GET /workspace/mandates` | Lists mandates |
+| `GET /workspace/mandates/:mandateId` | Reads a mandate |
+
+The route implementation is the source of truth for current access checks and response schemas.
 
 ## Security model
 
@@ -456,7 +526,7 @@ Riventa is designed around explicit trust boundaries and contract-enforced invar
 - Buyer actions require the buyer account.
 - Supplier acceptance requires the named supplier.
 - Inspector attestations require the assigned active inspector.
-- Agent actions require the authorized agent and mandate or trade snapshot.
+- Agent actions require the authorized agent and applicable mandate/trade snapshot.
 - Administrative actions require the configured multisig threshold.
 - Backend sessions and AI output cannot replace contract authorization.
 
@@ -477,26 +547,29 @@ Riventa is designed around explicit trust boundaries and contract-enforced invar
 - Revocation does not silently invalidate an already-funded trade.
 - The agent cannot directly transfer customer escrow.
 
-### Privacy
+### Privacy and identity
 
 - Document contents and evidence files are not stored directly on-chain.
 - On-chain commitments are fixed-size hashes.
-- The planned backend uses private encrypted document storage.
-- AI is intended to process structured findings and explain potential inconsistencies, not make binding financial decisions.
+- Wallet authentication proves control of an account key, not legal identity or KYB status.
+- PostgreSQL and backend state are not authoritative escrow records.
+- AI findings, when implemented, must remain advisory and may be incorrect or incomplete.
 
 ### Deployment assumptions
 
-The contract source has no upgrade method. The deployment design calls for removing the temporary deployer full-access key after deployment and code-hash verification. These operational deployment controls must be verified on the actual deployed account; source code alone does not prove that a deployed account has no full-access key.
+The contract source has no upgrade method. The deployment design calls for removing the temporary deployer full-access key after deployment and code-hash verification.
+
+These operational deployment controls must be verified on the actual deployed account; source code alone does not prove that a deployed account has no full-access key.
 
 ## Cross-chain direction
 
 NEAR Intents is being evaluated as an optional cross-chain asset-routing layer.
 
-The proposed direction is to let a user access supported external assets through an embedded-wallet experience, route assets through a cross-chain service, and ultimately fund Riventa's NEP-141 escrow on NEAR.
+The proposed direction is to let users access supported external assets through a wallet experience, route assets through a cross-chain service, and ultimately fund Riventa's existing NEP-141 escrow on NEAR.
 
 This is separate from the core trade and mandate contract.
 
-The Tidepool sandbox work has included dry-quote experimentation, but a dry quote is not a completed deposit, swap, delivery, or refund.
+Tidepool sandbox quote experimentation is not a completed deposit, swap, delivery, or refund.
 
 The following remain unverified or unimplemented:
 
@@ -524,12 +597,21 @@ riventa/
 │   └── sdd-token/
 ├── integration-tests/
 │   └── tests/
-│       ├── funding_flow.rs
-│       └── sandbox_smoke.rs
 ├── backend/
-│   └── README.md
+│   ├── migrations/
+│   ├── src/
+│   │   ├── auth/
+│   │   ├── db/
+│   │   ├── domain/
+│   │   ├── near/
+│   │   ├── workspace/
+│   │   └── server.ts
+│   └── package.json
 ├── frontend/
-│   └── README.md
+│   ├── src/
+│   │   ├── app/
+│   │   └── components/
+│   └── package.json
 ├── docs/
 │   ├── decisions/
 │   ├── diagrams/
@@ -548,6 +630,8 @@ riventa/
 │   ├── 12-mvp-scope-and-roadmap.md
 │   ├── DECISION-REGISTER.md
 │   └── INDEX.md
+├── package.json
+├── pnpm-workspace.yaml
 ├── Cargo.toml
 ├── rust-toolchain.toml
 └── README.md
@@ -557,28 +641,66 @@ riventa/
 
 ### Requirements
 
+- Node.js `>=22.20.0`
+- pnpm `11.22.0`
 - Rust toolchain `1.99.1` (pinned in `rust-toolchain.toml`)
 - `rustfmt` and `clippy` components
-- The `wasm32-unknown-unknown` target for contract builds
-- Cargo
+- `wasm32-unknown-unknown` target
+- PostgreSQL for backend development
+- NEAR Sandbox for contract integration tests
 
 ### Setup
 
 ```bash
-git clone https://github.com/Gidy515/Riventa-finance-.git Riventa
+git clone https://github.com/Gidy515/Riventa-finance-.git
 cd Riventa
+pnpm install
 rustup target add wasm32-unknown-unknown
 ```
 
-### Verify the workspace
+### Configure the backend
 
-Run these from the repository root. They reproduce the results in the [Verification](#verification) table.
+Create the backend environment file using the variable names documented in the backend configuration module and backend documentation.
+
+Configure the database connection, allowed frontend origin, NEAR network/RPC, and deployed contract/indexer settings required by the features you intend to run.
+
+Do not commit secrets or private keys.
+
+Create the local PostgreSQL database, then run:
+
+```bash
+pnpm --filter @riventa/backend migrate
+```
+
+### Run the application
+
+From the repository root:
+
+```bash
+# Run frontend and backend in parallel
+pnpm dev
+
+# Or run each service separately
+pnpm dev:frontend
+pnpm dev:backend
+```
+
+The frontend development server binds to `127.0.0.1`. Backend host, port, and CORS origins are controlled by its environment configuration.
+
+### Build and typecheck application packages
+
+```bash
+pnpm build
+pnpm typecheck
+```
+
+### Verify the Rust workspace
 
 ```bash
 # Formatting
 cargo fmt --all -- --check
 
-# Unit, integration and sandbox tests
+# Unit, integration, and sandbox tests
 cargo test --workspace
 
 # WASM-target compile check
@@ -588,11 +710,9 @@ cargo check --workspace --target wasm32-unknown-unknown
 git diff --check
 ```
 
-The integration tests use `near-workspaces` and run against a local NEAR sandbox.
+The integration tests use `near-workspaces` and run against a local NEAR Sandbox.
 
-To apply formatting instead of only checking it, run `cargo fmt --all`.
-
-### Build the contract
+To build the contract:
 
 ```bash
 cargo build \
@@ -603,22 +723,33 @@ cargo build \
 
 The WASM artifact is written to `target/wasm32-unknown-unknown/release/`.
 
-For a reproducible milestone, record the commit hash and test output alongside any deployment artifact.public API and implementation status, use the contract source and the verified milestone described in this README until those specifications are reconciled.
+For a reproducible milestone, record the commit hash and test output alongside any deployment artifact.
+
+## Post-MVP roadmap
+
+The following items are planned extensions, not claims about the current implementation.
+
+1. **AI document intelligence:** Private document ingestion, OCR, field extraction, cross-document consistency checks, anomaly detection, risk explanations, and human review.
+2. **Agent orchestration:** A durable worker that evaluates mandate constraints, requests permitted actions, handles retries, and never holds buyer signing authority or bypasses contract checks.
+3. **Dispute resolution:** Dispute opening, evidence submission, resolver decisions and replacement, deadlines, and complete contract/frontend/backend workflows.
+4. **NEAR Intents:** Live cross-chain deposits and settlement, destination verification, replay protection, and reconciliation.
+5. **Enterprise identity and access:** Organization accounts, KYB integrations, granular roles, and auditable document access.
+6. **Trade integrations:** Logistics/shipment tracking, inspection providers, trade-finance partners, and ERP/accounting systems.
+7. **Analytics and reporting:** Trade performance, supplier delivery metrics, inspection/dispute reporting, and exportable audit trails.
+8. **Production hardening:** Independent contract/backend security reviews, load testing, monitoring, backups, key-management procedures, incident response, and operational runbooks.
 
 ## Limitations and non-goals
 
-The current milestone is a hackathon-stage contract implementation, not a production trade-finance deployment.
-
-In particular:
+The current milestone is an MVP/hackathon-stage implementation, not a production trade-finance deployment.
 
 - A document hash proves commitment consistency, not document authenticity.
 - An inspection attestation is an authorized inspector's recorded claim, not an oracle proving physical-world events.
 - A wallet account is not, by itself, legal identity or KYB verification.
-- AI findings are advisory and may be incorrect or incomplete.
+- AI document intelligence is not implemented as a production capability.
 - PostgreSQL and backend state are not authoritative escrow records.
 - SDD is a test token and has no represented monetary value.
-- Dispute resolution is not yet implemented in the current contract interface.
+- Complete dispute resolution is not implemented.
 - NEAR Intents/Tidepool cross-chain settlement is not live or production-verified.
 - Production deployment, monitoring, operational key management, and recovery procedures require further work.
 
-Riventa's central security principle is that **automation may operate within authority granted by a buyer, but it cannot create its own authority or bypass the smart contract's financial controls.**
+Riventa's central security principle is that **automation may operate only within authority granted by a buyer; it cannot create its own authority or bypass the smart contract's financial controls.**
